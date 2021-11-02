@@ -1,0 +1,17 @@
+[package]
+name = "webcam_onnx"
+version = "0.1.0"
+edition = "2018"
+
+[lib]
+name = "libwebcam_onnx"
+path = "src/lib.rs"
+
+[[bin]]
+name = "webcam_onnx"
+path = "src/main.rs"
+
+[dependencies]
+# This might require libv4l-dev on your system
+rscam = "0.5.5"
+actix-web = "3"
