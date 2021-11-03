@@ -1,4 +1,5 @@
 use image::{self, ImageBuffer, Rgb};
+use smallvec::SmallVec;
 use tract_onnx::prelude::*;
 
 pub fn get_model_run_func(
@@ -96,12 +97,45 @@ pub fn example() -> TractResult<()> {
     Ok(())
 }
 
+pub fn get_top_bbox_from_ultraface<'bbox_life>(
+    result: SmallVec<[Arc<Tensor>; 4]>,
+) -> (Vec<f32>, f32) {
+    let mut confidences_face: Vec<f32> = result[0]
+        .to_array_view::<f32>()
+        .unwrap()
+        .iter()
+        .cloned()
+        .collect();
+
+    let bboxes: Vec<f32> = result[1]
+        .to_array_view::<f32>()
+        .unwrap()
+        .iter()
+        .cloned()
+        .collect::<Vec<f32>>();
+
+    let mut bboxes: Vec<&[f32]> = bboxes.chunks(4).collect();
+
+    let mut bboxes_with_confidences: Vec<(&[f32], f32)> =
+        bboxes.drain(..).zip(confidences_face.drain(..)).collect();
+
+    bboxes_with_confidences.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+    let (sorted_bboxes, sorted_confidences): (Vec<&[f32]>, Vec<f32>) =
+        bboxes_with_confidences.drain(..).unzip();
+
+    // Return top elements
+    (sorted_bboxes[0].into(), sorted_confidences[0])
+}
+
 // Library without "include" folder in `~/.local/lib`
 
 #[cfg(test)]
 mod tests {
+    use crate::nn::get_top_bbox_from_ultraface;
+
     use super::{example, get_model_run_func, get_preproc_func};
-    use ndarray::{s, Array, Array3, ArrayBase, OwnedRepr};
+    use ndarray::{s, Array, Array3};
     use tract_onnx::prelude::tvec;
 
     #[test]
@@ -123,6 +157,23 @@ mod tests {
         for (index, output) in result.iter().enumerate() {
             println!("Output {} has shape {:?}", index, output.shape());
         }
+    }
+
+    #[test]
+    fn test_get_top_bbox() {
+        let model_name = "ultraface-RFB-320";
+        let infer_func = get_model_run_func(model_name).unwrap();
+        let preproc_func = get_preproc_func(model_name).unwrap();
+
+        let image = image::open("grace_hopper.jpg").unwrap().to_rgb8();
+
+        let result = infer_func(tvec!(preproc_func(image))).unwrap();
+
+        let (top_bbox, top_confidence) = get_top_bbox_from_ultraface(result);
+        println!(
+            "Top bbox: {:?} with confidence {:?}",
+            top_bbox, top_confidence
+        );
     }
 
     #[test]

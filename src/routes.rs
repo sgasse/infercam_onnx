@@ -5,6 +5,9 @@ use futures_core::Stream;
 use rscam::Frame;
 use std::pin::Pin;
 
+use super::responder::InferCamera;
+use crate::nn::{get_model_run_func, get_preproc_func};
+
 use super::sensors::get_frame_fn;
 
 #[get("/index")]
@@ -53,6 +56,21 @@ impl Stream for StreamableCamera {
             .concat(),
         );
 
+        println!("Streaming...");
+
         Poll::Ready(Some(Ok(body)))
     }
+}
+
+#[get("/face_detection")]
+async fn face_detection() -> HttpResponse {
+    let infer_stream = InferCamera::new(
+        get_frame_fn(),
+        get_model_run_func("ultraface-RFB-320").unwrap(),
+        get_preproc_func("ultraface-RFB-320").unwrap(),
+    );
+
+    HttpResponse::Ok()
+        .content_type("multipart/x-mixed-replace; boundary=frame")
+        .streaming(infer_stream)
 }
