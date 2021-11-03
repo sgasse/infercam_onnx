@@ -1,4 +1,5 @@
 use image::{self, ImageBuffer, Rgb};
+use ndarray::s;
 use smallvec::SmallVec;
 use tract_onnx::prelude::*;
 
@@ -103,6 +104,7 @@ pub fn get_top_bbox_from_ultraface<'bbox_life>(
     let mut confidences_face: Vec<f32> = result[0]
         .to_array_view::<f32>()
         .unwrap()
+        .slice(s![0, .., 0])
         .iter()
         .cloned()
         .collect();

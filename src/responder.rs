@@ -37,10 +37,12 @@ impl Stream for InferCamera {
     type Item = Result<Bytes, Error>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let frame = (*self.gen_frame)();
-        let frame = load_from_memory_with_format(&frame, ImageFormat::Jpeg)
-            .unwrap()
-            .to_rgb8();
+        // let frame = (*self.gen_frame)();
+        // let frame = load_from_memory_with_format(&frame, ImageFormat::Jpeg)
+        //     .unwrap()
+        //     .to_rgb8();
+        let frame = image::open("grace_hopper.jpg").unwrap().to_rgb8();
+        let (width, height) = frame.dimensions();
 
         let infer_result =
             (*self.infer_frame)(tvec!((*self.preproc_frame)(frame.clone()))).unwrap();
@@ -48,8 +50,8 @@ impl Stream for InferCamera {
         let (top_bbox, top_confidence) = get_top_bbox_from_ultraface(infer_result);
 
         // Coordinates of top-left and bottom-right point
-        let (x_tl, y_tl) = (top_bbox[0] * 1280.0, top_bbox[1] * 720.0);
-        let (x_br, y_br) = (top_bbox[2] * 1280.0, top_bbox[3] * 720.0);
+        let (x_tl, y_tl) = (top_bbox[0] * width as f32, top_bbox[1] * height as f32);
+        let (x_br, y_br) = (top_bbox[2] * width as f32, top_bbox[3] * height as f32);
         println!(
             "Confidence {}: top-left ({}, {}), bottom-right ({}, {})",
             top_confidence, x_tl, y_tl, x_br, y_br
@@ -62,7 +64,7 @@ impl Stream for InferCamera {
         let mut buf = BufWriter::new(Vec::new());
 
         JpegEncoder::new(&mut buf)
-            .encode(&frame, 1280, 720, image::ColorType::Rgb8)
+            .encode(&frame, width, height, image::ColorType::Rgb8)
             .unwrap();
 
         let bytes = buf.into_inner().unwrap();
