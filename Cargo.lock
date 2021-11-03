@@ -2682,6 +2682,7 @@ dependencies = [
  "actix-web",
  "futures-core",
  "image",
+ "ndarray",
  "rscam",
  "tract-onnx",
 ]
