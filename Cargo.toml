@@ -16,3 +16,6 @@ path = "src/main.rs"
 rscam = "0.5.5"
 actix-web = "3"
 futures-core = "0.3.17"
+# onnxruntime = { version = "0.0.14", features = ["model-fetching"] }
+tract-onnx = "0.15.5"
+image = "0.23.14"
