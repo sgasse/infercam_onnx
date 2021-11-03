@@ -37,11 +37,11 @@ impl Stream for InferCamera {
     type Item = Result<Bytes, Error>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // let frame = (*self.gen_frame)();
-        // let frame = load_from_memory_with_format(&frame, ImageFormat::Jpeg)
-        //     .unwrap()
-        //     .to_rgb8();
-        let frame = image::open("grace_hopper.jpg").unwrap().to_rgb8();
+        let frame = (*self.gen_frame)();
+        let frame = load_from_memory_with_format(&frame, ImageFormat::Jpeg)
+            .unwrap()
+            .to_rgb8();
+        // let frame = image::open("grace_hopper.jpg").unwrap().to_rgb8();
         let (width, height) = frame.dimensions();
 
         let infer_result =

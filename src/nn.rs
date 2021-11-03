@@ -104,7 +104,7 @@ pub fn get_top_bbox_from_ultraface<'bbox_life>(
     let mut confidences_face: Vec<f32> = result[0]
         .to_array_view::<f32>()
         .unwrap()
-        .slice(s![0, .., 0])
+        .slice(s![0, .., 1])
         .iter()
         .cloned()
         .collect();
