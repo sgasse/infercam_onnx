@@ -1,9 +1,9 @@
 use actix_web::web::Bytes;
-use actix_web::{get, Error, HttpResponse, Responder};
+use actix_web::Error;
 use futures_core::task::{Context, Poll};
 use futures_core::Stream;
 use image::codecs::jpeg::JpegEncoder;
-use image::{load_from_memory_with_format, save_buffer_with_format, ImageBuffer, ImageFormat, Rgb};
+use image::{load_from_memory_with_format, ImageBuffer, ImageFormat, Rgb};
 use imageproc::drawing::draw_hollow_rect;
 use imageproc::rect::Rect;
 use rscam::Frame;
@@ -12,6 +12,36 @@ use std::pin::Pin;
 use tract_onnx::prelude::{tvec, Arc, TVec, Tensor, TractResult};
 
 use super::nn::get_top_bbox_from_ultraface;
+
+pub struct StreamableCamera {
+    gen_frame: Box<dyn Fn() -> Frame>,
+}
+
+impl StreamableCamera {
+    pub fn new(gen_frame: Box<dyn Fn() -> Frame>) -> StreamableCamera {
+        StreamableCamera { gen_frame }
+    }
+}
+
+impl Stream for StreamableCamera {
+    type Item = Result<Bytes, Error>;
+
+    fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let frame = (*self.gen_frame)();
+        let body: Bytes = Bytes::copy_from_slice(
+            &[
+                "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
+                &frame[..],
+                "\r\n\r\n".as_bytes(),
+            ]
+            .concat(),
+        );
+
+        println!("Streaming...");
+
+        Poll::Ready(Some(Ok(body)))
+    }
+}
 
 pub struct InferCamera {
     gen_frame: Box<dyn Fn() -> Frame>,
@@ -41,7 +71,7 @@ impl Stream for InferCamera {
         let frame = load_from_memory_with_format(&frame, ImageFormat::Jpeg)
             .unwrap()
             .to_rgb8();
-        // let frame = image::open("grace_hopper.jpg").unwrap().to_rgb8();
+
         let (width, height) = frame.dimensions();
 
         let infer_result =

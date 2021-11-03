@@ -63,6 +63,38 @@ pub fn get_preproc_func(
     Ok(Box::new(preproc_func))
 }
 
+pub fn get_top_bbox_from_ultraface<'bbox_life>(
+    result: SmallVec<[Arc<Tensor>; 4]>,
+) -> (Vec<f32>, f32) {
+    let mut confidences_face: Vec<f32> = result[0]
+        .to_array_view::<f32>()
+        .unwrap()
+        .slice(s![0, .., 1])
+        .iter()
+        .cloned()
+        .collect();
+
+    let bboxes: Vec<f32> = result[1]
+        .to_array_view::<f32>()
+        .unwrap()
+        .iter()
+        .cloned()
+        .collect::<Vec<f32>>();
+
+    let mut bboxes: Vec<&[f32]> = bboxes.chunks(4).collect();
+
+    let mut bboxes_with_confidences: Vec<(&[f32], f32)> =
+        bboxes.drain(..).zip(confidences_face.drain(..)).collect();
+
+    bboxes_with_confidences.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+    let (sorted_bboxes, sorted_confidences): (Vec<&[f32]>, Vec<f32>) =
+        bboxes_with_confidences.drain(..).unzip();
+
+    // Return top elements
+    (sorted_bboxes[0].into(), sorted_confidences[0])
+}
+
 pub fn example() -> TractResult<()> {
     let model = tract_onnx::onnx()
         .model_for_path("ultraface-RFB-640.onnx")?
@@ -96,38 +128,6 @@ pub fn example() -> TractResult<()> {
         .max_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
     println!("result: {:?}", best);
     Ok(())
-}
-
-pub fn get_top_bbox_from_ultraface<'bbox_life>(
-    result: SmallVec<[Arc<Tensor>; 4]>,
-) -> (Vec<f32>, f32) {
-    let mut confidences_face: Vec<f32> = result[0]
-        .to_array_view::<f32>()
-        .unwrap()
-        .slice(s![0, .., 1])
-        .iter()
-        .cloned()
-        .collect();
-
-    let bboxes: Vec<f32> = result[1]
-        .to_array_view::<f32>()
-        .unwrap()
-        .iter()
-        .cloned()
-        .collect::<Vec<f32>>();
-
-    let mut bboxes: Vec<&[f32]> = bboxes.chunks(4).collect();
-
-    let mut bboxes_with_confidences: Vec<(&[f32], f32)> =
-        bboxes.drain(..).zip(confidences_face.drain(..)).collect();
-
-    bboxes_with_confidences.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-
-    let (sorted_bboxes, sorted_confidences): (Vec<&[f32]>, Vec<f32>) =
-        bboxes_with_confidences.drain(..).unzip();
-
-    // Return top elements
-    (sorted_bboxes[0].into(), sorted_confidences[0])
 }
 
 // Library without "include" folder in `~/.local/lib`
