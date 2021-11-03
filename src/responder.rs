@@ -67,10 +67,8 @@ impl Stream for InferCamera {
     type Item = Result<Bytes, Error>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let frame = (*self.gen_frame)();
-        let frame = load_from_memory_with_format(&frame, ImageFormat::Jpeg)
-            .unwrap()
-            .to_rgb8();
+        let frame = (*self.gen_frame)().to_vec();
+        let frame: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_raw(1280, 720, frame).unwrap();
 
         let (width, height) = frame.dimensions();
 
@@ -82,9 +80,13 @@ impl Stream for InferCamera {
         // Coordinates of top-left and bottom-right point
         let (x_tl, y_tl) = (top_bbox[0] * width as f32, top_bbox[1] * height as f32);
         let (x_br, y_br) = (top_bbox[2] * width as f32, top_bbox[3] * height as f32);
-        println!(
+        log::debug!(
             "Confidence {}: top-left ({}, {}), bottom-right ({}, {})",
-            top_confidence, x_tl, y_tl, x_br, y_br
+            top_confidence,
+            x_tl,
+            y_tl,
+            x_br,
+            y_br
         );
         let face_rect =
             Rect::at(x_tl as i32, y_tl as i32).of_size((x_br - x_tl) as u32, (y_br - y_tl) as u32);

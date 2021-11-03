@@ -4,6 +4,8 @@ use libwebcam_onnx::routes::{face_detection, index, video_stream};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    env_logger::init();
+
     HttpServer::new(|| {
         App::new()
             .service(index)
