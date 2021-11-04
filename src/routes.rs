@@ -6,18 +6,20 @@ use actix_web::{get, HttpResponse, Responder};
 #[get("/index")]
 async fn index() -> impl Responder {
     let resp = r#"
+<!DOCTYPE html>
+<html>
+<head>
+<title>Index</title>
+</head>
 <body>
 <div class="container">
-    <div class="row">
-        <div class="col-lg-8  offset-lg-2">
-            <h3 class="mt-5">Live Streaming</h3>
-            <img src="./video_stream" width="100%">
-        </div>
-    </div>
+    <h3>Streaming</h3>
+    <img src="./video_stream" width="100%">
 </div>
 </body>
+</html>
 "#;
-    resp
+    HttpResponse::Ok().content_type("text/html").body(resp)
 }
 
 #[get("/video_stream")]

@@ -1,6 +1,6 @@
 [package]
 name = "webcam_onnx"
-version = "0.1.0"
+version = "0.2.1"
 edition = "2018"
 
 [lib]
@@ -12,11 +12,10 @@ name = "webcam_onnx"
 path = "src/main.rs"
 
 [dependencies]
-# This might require libv4l-dev on your system
+# This requires libv4l-dev on your system
 rscam = "0.5.5"
 actix-web = "3"
 futures-core = "0.3.17"
-# onnxruntime = { version = "0.0.14", features = ["model-fetching"] }
 tract-onnx = "0.15.5"
 image = "0.23.14"
 imageproc = "0.22.0"

@@ -3,11 +3,11 @@ use actix_web::Error;
 use futures_core::task::{Context, Poll};
 use futures_core::Stream;
 use image::codecs::jpeg::JpegEncoder;
-use image::{load_from_memory_with_format, ImageBuffer, ImageFormat, Rgb};
+use image::{ImageBuffer, Rgb};
 use imageproc::drawing::draw_hollow_rect;
 use imageproc::rect::Rect;
 use rscam::Frame;
-use std::io::BufWriter;
+use std::io::Cursor;
 use std::pin::Pin;
 use tract_onnx::prelude::{tvec, Arc, TVec, Tensor, TractResult};
 
@@ -37,7 +37,7 @@ impl Stream for StreamableCamera {
             .concat(),
         );
 
-        println!("Streaming...");
+        log::debug!("Streaming...");
 
         Poll::Ready(Some(Ok(body)))
     }
@@ -67,19 +67,28 @@ impl Stream for InferCamera {
     type Item = Result<Bytes, Error>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        log::debug!("Entering poll");
         let frame = (*self.gen_frame)().to_vec();
         let frame: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_raw(1280, 720, frame).unwrap();
+        log::debug!("Image read");
 
         let (width, height) = frame.dimensions();
 
         let infer_result =
             (*self.infer_frame)(tvec!((*self.preproc_frame)(frame.clone()))).unwrap();
+        log::debug!("Inference done");
 
         let (top_bbox, top_confidence) = get_top_bbox_from_ultraface(infer_result);
 
         // Coordinates of top-left and bottom-right point
         let (x_tl, y_tl) = (top_bbox[0] * width as f32, top_bbox[1] * height as f32);
         let (x_br, y_br) = (top_bbox[2] * width as f32, top_bbox[3] * height as f32);
+
+        let face_rect =
+            Rect::at(x_tl as i32, y_tl as i32).of_size((x_br - x_tl) as u32, (y_br - y_tl) as u32);
+
+        let frame = draw_hollow_rect(&frame, face_rect, Rgb::from([255, 0, 0]));
+
         log::debug!(
             "Confidence {}: top-left ({}, {}), bottom-right ({}, {})",
             top_confidence,
@@ -88,22 +97,20 @@ impl Stream for InferCamera {
             x_br,
             y_br
         );
-        let face_rect =
-            Rect::at(x_tl as i32, y_tl as i32).of_size((x_br - x_tl) as u32, (y_br - y_tl) as u32);
 
-        let frame = draw_hollow_rect(&frame, face_rect, Rgb::from([255, 0, 0]));
+        let mut buf = Cursor::new(Vec::new());
 
-        let mut buf = BufWriter::new(Vec::new());
-
-        JpegEncoder::new(&mut buf)
+        JpegEncoder::new_with_quality(&mut buf, 70)
             .encode(&frame, width, height, image::ColorType::Rgb8)
             .unwrap();
 
-        let bytes = buf.into_inner().unwrap();
+        let bytes = buf.into_inner();
+
+        log::debug!("Image encoded");
 
         let body: Bytes = Bytes::copy_from_slice(
             &[
-                "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
+                "--frame\r\nContent-Type: image/webp\r\n\r\n".as_bytes(),
                 &bytes[..],
                 "\r\n\r\n".as_bytes(),
             ]

@@ -1,10 +1,13 @@
 use actix_web::App;
 use actix_web::HttpServer;
+use env_logger::TimestampPrecision;
 use libwebcam_onnx::routes::{face_detection, index, video_stream};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    env_logger::init();
+    env_logger::builder()
+        .format_timestamp(Some(TimestampPrecision::Millis))
+        .init();
 
     HttpServer::new(|| {
         App::new()
