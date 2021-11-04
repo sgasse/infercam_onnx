@@ -1,4 +1,4 @@
-use image::{self, ImageBuffer, Rgb};
+use image::{self, RgbImage};
 use ndarray::s;
 use smallvec::SmallVec;
 use std::convert::TryInto;
@@ -128,16 +128,14 @@ pub fn get_model_run_func(
     Some(Box::new(move |input_tensor| model.run(input_tensor)))
 }
 
-pub fn get_preproc_func(
-    model_name: &str,
-) -> Result<Box<dyn Fn(ImageBuffer<Rgb<u8>, Vec<u8>>) -> Tensor>, String> {
+pub fn get_preproc_func(model_name: &str) -> Result<Box<dyn Fn(RgbImage) -> Tensor>, String> {
     let (width, height) = match model_name {
         "ultraface-RFB-640" => (640, 480),
         "ultraface-RFB-320" => (320, 240),
         _ => return Err(format!("Model {} not found", model_name)),
     };
-    let preproc_func = move |image: ImageBuffer<Rgb<u8>, Vec<u8>>| {
-        let resized: ImageBuffer<Rgb<u8>, Vec<u8>> = image::imageops::resize(
+    let preproc_func = move |image: RgbImage| {
+        let resized: RgbImage = image::imageops::resize(
             &image,
             width,
             height,

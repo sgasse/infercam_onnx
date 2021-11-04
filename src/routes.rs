@@ -1,7 +1,8 @@
+use actix_web::{get, HttpResponse, Responder};
+
 use super::nn::{get_model_run_func, get_preproc_func};
 use super::responder::{InferCamera, StreamableCamera};
 use super::sensors::get_frame_fn;
-use actix_web::{get, HttpResponse, Responder};
 
 #[get("/index")]
 async fn index() -> impl Responder {
