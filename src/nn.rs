@@ -62,7 +62,8 @@ fn sort_ultraface_output_ascending(result: SmallVec<[Arc<Tensor>; 4]>) -> Vec<([
 
 fn non_maximum_suppression(
     mut sorted_bboxes_with_confidences: Vec<([f32; 4], f32)>,
-    iou_threshold: f32,
+    max_iou: f32,
+    min_confidence: f32,
 ) -> Vec<([f32; 4], f32)> {
     if sorted_bboxes_with_confidences.len() < 2 {
         return sorted_bboxes_with_confidences;
@@ -74,14 +75,14 @@ fn non_maximum_suppression(
         // Get next most confident bbox
         if let Some((bbox, confidence)) = sorted_bboxes_with_confidences.pop() {
             // Early exit when we get to low confidences
-            if confidence < 0.5 {
+            if confidence < min_confidence {
                 break 'candidates;
             }
 
             // Check for overlap with any of the selected bboxes
             for (selected_bbox, _) in selected.iter() {
                 match iou(&bbox, selected_bbox) {
-                    x if x > iou_threshold => continue 'candidates,
+                    x if x > max_iou => continue 'candidates,
                     _ => (),
                 }
             }
@@ -170,7 +171,9 @@ pub fn example() -> TractResult<()> {
         .into_optimized()?
         .into_runnable()?;
 
-    let image = image::open("grace_hopper.jpg").unwrap().to_rgb8();
+    let image = image::open("test_pics/michael-dam-mEZ3PoFGs_k-unsplash.jpg")
+        .unwrap()
+        .to_rgb8();
     let resized =
         image::imageops::resize(&image, 640, 480, ::image::imageops::FilterType::Triangle);
 
@@ -199,16 +202,15 @@ pub fn example() -> TractResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::nn::get_top_bbox_from_ultraface;
+    use crate::nn::{non_maximum_suppression, sort_ultraface_output_ascending};
 
     use super::{example, get_model_run_func, get_preproc_func};
     use tract_onnx::prelude::tvec;
 
     #[test]
     fn run_example() {
-        let res = example();
-        assert_eq!(res.unwrap(), ());
-        println!("Test done");
+        let result = example();
+        assert_eq!(result.unwrap(), ());
     }
 
     #[test]
@@ -217,40 +219,26 @@ mod tests {
         let infer_func = get_model_run_func(model_name).unwrap();
         let preproc_func = get_preproc_func(model_name).unwrap();
 
-        let image = image::open("grace_hopper.jpg").unwrap().to_rgb8();
+        let images_with_num_faces = vec![
+            ("test_pics/bruce-mars-ZXq7xoo98b0-unsplash.jpg", 3),
+            ("test_pics/clarke-sanders-ybPJ47PMT_M-unsplash.jpg", 6),
+            ("test_pics/helena-lopes-e3OUQGT9bWU-unsplash.jpg", 4),
+            ("test_pics/kaleidico-d6rTXEtOclk-unsplash.jpg", 3),
+            ("test_pics/michael-dam-mEZ3PoFGs_k-unsplash.jpg", 1),
+            ("test_pics/mika-W0i1N6FdCWA-unsplash.jpg", 1),
+            ("test_pics/omar-lopez-T6zu4jFhVwg-unsplash.jpg", 10),
+        ];
+        for (filename, expected_num_faces) in images_with_num_faces.iter() {
+            let image = image::open(filename).unwrap().to_rgb8();
 
-        let result = infer_func(tvec!(preproc_func(image))).unwrap();
-        for (index, output) in result.iter().enumerate() {
-            println!("Output {} has shape {:?}", index, output.shape());
+            let result = infer_func(tvec!(preproc_func(image))).unwrap();
+
+            let sorted_output = sort_ultraface_output_ascending(result);
+            let bboxes_with_confidences = non_maximum_suppression(sorted_output, 0.5, 0.5);
+
+            let num_bboxes = bboxes_with_confidences.len() as i32;
+            println!("Number of bboxes found: {:?}", num_bboxes);
+            assert_eq!(num_bboxes, *expected_num_faces);
         }
-    }
-
-    #[test]
-    fn test_get_top_bbox() {
-        let model_name = "ultraface-RFB-320";
-        let infer_func = get_model_run_func(model_name).unwrap();
-        let preproc_func = get_preproc_func(model_name).unwrap();
-
-        let image = image::open("grace_hopper.jpg").unwrap().to_rgb8();
-
-        let result = infer_func(tvec!(preproc_func(image))).unwrap();
-
-        let (top_bbox, top_confidence) = get_top_bbox_from_ultraface(result);
-        println!(
-            "Top bbox: {:?} with confidence {:?}",
-            top_bbox, top_confidence
-        );
-    }
-
-    fn take_fixed_length_array_borow(arr: &[f32; 4]) {
-        println!("Got array {:?}", arr);
-    }
-
-    use std::convert::TryInto;
-
-    #[test]
-    fn test_coercion() {
-        let four_elem_vec: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0];
-        take_fixed_length_array_borow(&four_elem_vec.try_into().unwrap());
     }
 }
