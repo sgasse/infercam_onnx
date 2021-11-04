@@ -95,6 +95,11 @@ fn non_maximum_suppression(
     selected
 }
 
+pub fn postproc_ultraface(result: SmallVec<[Arc<Tensor>; 4]>) -> Vec<([f32; 4], f32)> {
+    let sorted_output = sort_ultraface_output_ascending(result);
+    non_maximum_suppression(sorted_output, 0.5, 0.5)
+}
+
 pub fn get_model_run_func(
     model_name: &str,
 ) -> Option<Box<dyn Fn(TVec<Tensor>) -> TractResult<TVec<Arc<Tensor>>>>> {
