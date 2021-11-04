@@ -1,7 +1,98 @@
 use image::{self, ImageBuffer, Rgb};
 use ndarray::s;
 use smallvec::SmallVec;
+use std::convert::TryInto;
 use tract_onnx::prelude::*;
+
+const EPS: f32 = 1.0e-7;
+
+fn bbox_area(bbox: &[f32; 4]) -> f32 {
+    let width = bbox[3] - bbox[1];
+    let height = bbox[2] - bbox[0];
+    if width < 0.0 || height < 0.0 {
+        // bbox is empty/undefined since the bottom-right corner is above the top left corner
+        return 0.0;
+    }
+
+    width * height
+}
+
+fn iou(bbox_a: &[f32; 4], bbox_b: &[f32; 4]) -> f32 {
+    // Calculate corner points of overlap box
+    // If the boxes do not overlap, the corner-points will be ill defined, i.e. the top left
+    // corner point will be below and to the right of the bottom right corner point. In this case,
+    // the area will be zero.
+    let overlap_box: [f32; 4] = [
+        f32::max(bbox_a[0], bbox_b[0]),
+        f32::max(bbox_a[1], bbox_b[1]),
+        f32::min(bbox_a[2], bbox_b[2]),
+        f32::min(bbox_a[3], bbox_b[3]),
+    ];
+
+    let overlap_area = bbox_area(&overlap_box);
+
+    overlap_area / (bbox_area(bbox_a) + bbox_area(bbox_b) - overlap_area + EPS)
+}
+
+fn sort_ultraface_output_ascending(result: SmallVec<[Arc<Tensor>; 4]>) -> Vec<([f32; 4], f32)> {
+    let mut confidences_face: Vec<f32> = result[0]
+        .to_array_view::<f32>()
+        .unwrap()
+        .slice(s![0, .., 1])
+        .iter()
+        .cloned()
+        .collect();
+
+    let bboxes: Vec<f32> = result[1]
+        .to_array_view::<f32>()
+        .unwrap()
+        .iter()
+        .cloned()
+        .collect::<Vec<f32>>();
+
+    let mut bboxes: Vec<[f32; 4]> = bboxes.chunks(4).map(|x| x.try_into().unwrap()).collect();
+
+    let mut bboxes_with_confidences: Vec<([f32; 4], f32)> =
+        bboxes.drain(..).zip(confidences_face.drain(..)).collect();
+
+    bboxes_with_confidences.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+    bboxes_with_confidences
+}
+
+fn non_maximum_suppression(
+    mut sorted_bboxes_with_confidences: Vec<([f32; 4], f32)>,
+    iou_threshold: f32,
+) -> Vec<([f32; 4], f32)> {
+    if sorted_bboxes_with_confidences.len() < 2 {
+        return sorted_bboxes_with_confidences;
+    }
+
+    // Choose most confident bbox (from the back of the ascending-sorted vector)
+    let mut selected = vec![sorted_bboxes_with_confidences.pop().unwrap()];
+    'candidates: loop {
+        // Get next most confident bbox
+        if let Some((bbox, confidence)) = sorted_bboxes_with_confidences.pop() {
+            // Early exit when we get to low confidences
+            if confidence < 0.5 {
+                break 'candidates;
+            }
+
+            // Check for overlap with any of the selected bboxes
+            for (selected_bbox, _) in selected.iter() {
+                match iou(&bbox, selected_bbox) {
+                    x if x > iou_threshold => continue 'candidates,
+                    _ => (),
+                }
+            }
+
+            // bbox has no large overlap with any of the selected ones, add it
+            selected.push((bbox, confidence))
+        }
+    }
+
+    selected
+}
 
 pub fn get_model_run_func(
     model_name: &str,
@@ -64,34 +155,9 @@ pub fn get_preproc_func(
 
 pub fn get_top_bbox_from_ultraface<'bbox_life>(
     result: SmallVec<[Arc<Tensor>; 4]>,
-) -> (Vec<f32>, f32) {
-    let mut confidences_face: Vec<f32> = result[0]
-        .to_array_view::<f32>()
-        .unwrap()
-        .slice(s![0, .., 1])
-        .iter()
-        .cloned()
-        .collect();
-
-    let bboxes: Vec<f32> = result[1]
-        .to_array_view::<f32>()
-        .unwrap()
-        .iter()
-        .cloned()
-        .collect::<Vec<f32>>();
-
-    let mut bboxes: Vec<&[f32]> = bboxes.chunks(4).collect();
-
-    let mut bboxes_with_confidences: Vec<(&[f32], f32)> =
-        bboxes.drain(..).zip(confidences_face.drain(..)).collect();
-
-    bboxes_with_confidences.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-
-    let (sorted_bboxes, sorted_confidences): (Vec<&[f32]>, Vec<f32>) =
-        bboxes_with_confidences.drain(..).unzip();
-
-    // Return top elements
-    (sorted_bboxes[0].into(), sorted_confidences[0])
+) -> ([f32; 4], f32) {
+    let mut sorted_bboxes_with_confidences = sort_ultraface_output_ascending(result);
+    sorted_bboxes_with_confidences.pop().unwrap()
 }
 
 pub fn example() -> TractResult<()> {
@@ -174,5 +240,17 @@ mod tests {
             "Top bbox: {:?} with confidence {:?}",
             top_bbox, top_confidence
         );
+    }
+
+    fn take_fixed_length_array_borow(arr: &[f32; 4]) {
+        println!("Got array {:?}", arr);
+    }
+
+    use std::convert::TryInto;
+
+    #[test]
+    fn test_coercion() {
+        let four_elem_vec: Vec<f32> = vec![1.0, 2.0, 3.0, 4.0];
+        take_fixed_length_array_borow(&four_elem_vec.try_into().unwrap());
     }
 }
