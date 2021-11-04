@@ -15,13 +15,13 @@ pub fn get_cam() -> Camera {
     cam
 }
 
-pub fn get_frame_fn() -> Box<dyn Fn() -> Frame> {
+pub fn get_frame_fn(resolution: (u32, u32), format: &str) -> Box<dyn Fn() -> Frame> {
     let mut cam = get_cam();
 
     cam.start(&Config {
         interval: (1, 30),
-        resolution: (1280, 720),
-        format: b"RGB3",
+        resolution,
+        format: format.as_bytes(),
         ..Default::default()
     })
     .unwrap();

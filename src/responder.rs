@@ -110,7 +110,7 @@ impl Stream for InferCamera {
 
         let body: Bytes = Bytes::copy_from_slice(
             &[
-                "--frame\r\nContent-Type: image/webp\r\n\r\n".as_bytes(),
+                "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
                 &bytes[..],
                 "\r\n\r\n".as_bytes(),
             ]

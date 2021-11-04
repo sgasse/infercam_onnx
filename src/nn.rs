@@ -136,7 +136,6 @@ mod tests {
     use crate::nn::get_top_bbox_from_ultraface;
 
     use super::{example, get_model_run_func, get_preproc_func};
-    use ndarray::{s, Array, Array3};
     use tract_onnx::prelude::tvec;
 
     #[test]
@@ -175,50 +174,5 @@ mod tests {
             "Top bbox: {:?} with confidence {:?}",
             top_bbox, top_confidence
         );
-    }
-
-    #[test]
-    fn run_ultraface_320_inference() {
-        let model_name = "ultraface-RFB-320";
-        let infer_func = get_model_run_func(model_name).unwrap();
-        let preproc_func = get_preproc_func(model_name).unwrap();
-
-        let image = image::open("grace_hopper.jpg").unwrap().to_rgb8();
-
-        let result = infer_func(tvec!(preproc_func(image))).unwrap();
-
-        let confidences = result[0].to_array_view::<f32>().unwrap();
-        let confidences_cls1 = confidences.slice(s![0, .., 0]);
-        let mut confidences_cls1: Vec<f32> = confidences_cls1.iter().cloned().collect();
-
-        let bboxes = result[1].to_array_view::<f32>().unwrap();
-        let bboxes: Vec<f32> = bboxes.iter().cloned().collect();
-        let mut bboxes: Vec<&[f32]> = bboxes.chunks(4).collect();
-
-        let mut bboxes_with_conf: Vec<(&[f32], f32)> =
-            bboxes.drain(..).zip(confidences_cls1.drain(..)).collect();
-
-        bboxes_with_conf.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-        for (bbox, confidence) in &bboxes_with_conf[..10] {
-            println!("bbox {:?} with confidence {:?}", bbox, confidence);
-        }
-
-        // confidences_cls1.sort_by(|a, b| b.partial_cmp(a).unwrap());
-        // println!("Top 10 scores: {:?}", &confidences_cls1[..10]);
-
-        let part_result = result[1].to_array_view::<f32>().unwrap();
-        let part_result = part_result.slice(s![0, 0, ..]);
-
-        println!("Result 1 at 0, 0: {:?}", part_result);
-        for (index, output) in result.iter().enumerate() {
-            println!("Output {} has shape {:?}", index, output.shape());
-        }
-    }
-
-    #[test]
-    fn test_array_slicing() {
-        let arr: Array3<u32> = Array::zeros((1, 400, 4));
-        let sliced = arr.slice(s!(0, 0, ..));
-        dbg!(sliced);
     }
 }

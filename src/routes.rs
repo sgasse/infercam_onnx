@@ -24,7 +24,7 @@ async fn index() -> impl Responder {
 
 #[get("/video_stream")]
 async fn video_stream() -> HttpResponse {
-    let cam_stream = StreamableCamera::new(get_frame_fn());
+    let cam_stream = StreamableCamera::new(get_frame_fn((1280, 720), "MJPG"));
 
     HttpResponse::Ok()
         .content_type("multipart/x-mixed-replace; boundary=frame")
@@ -34,7 +34,7 @@ async fn video_stream() -> HttpResponse {
 #[get("/face_detection")]
 async fn face_detection() -> HttpResponse {
     let infer_stream = InferCamera::new(
-        get_frame_fn(),
+        get_frame_fn((1280, 720), "RGB3"),
         get_model_run_func("ultraface-RFB-320").unwrap(),
         get_preproc_func("ultraface-RFB-320").unwrap(),
     );
