@@ -4,7 +4,7 @@
 //! - `StreamableCamera` initializes the webcam and captures a new frame in its `poll_next` method.
 //! - `InferCamera` initializes both the webcam and a neural network model from an `.onnx` file.
 //!   In the `poll_next` method, every frame is passed through the network, the output postprocessed
-//!   and bounding boxes drawn onto the original frame.
+//!   and bounding boxes with confidences drawn onto the original frame.
 
 use actix_web::web::Bytes;
 use actix_web::Error;
@@ -12,9 +12,10 @@ use futures_core::task::{Context, Poll};
 use futures_core::Stream;
 use image::codecs::jpeg::JpegEncoder;
 use image::{ColorType, Rgb, RgbImage};
-use imageproc::drawing::draw_hollow_rect;
+use imageproc::drawing::{draw_hollow_rect, draw_text};
 use imageproc::rect::Rect;
 use rscam::Frame;
+use rusttype::{Font, Scale};
 use std::io::Cursor;
 use std::pin::Pin;
 use tract_onnx::prelude::{tvec, Arc, TVec, Tensor, TractResult};
@@ -117,7 +118,7 @@ impl Stream for InferCamera {
     }
 }
 
-/// Draw bounding boxes on the image.
+/// Draw bounding boxes with confidence scores on the image.
 fn draw_bboxes_on_image(
     mut frame: RgbImage,
     bboxes_with_confidences: Vec<([f32; 4], f32)>,
@@ -126,7 +127,10 @@ fn draw_bboxes_on_image(
 ) -> RgbImage {
     let (width, height) = (width as f32, height as f32);
 
-    for (bbox, _confidence) in bboxes_with_confidences.iter() {
+    let font = load_font();
+    let color = Rgb::from([0, 255, 0]);
+
+    for (bbox, confidence) in bboxes_with_confidences.iter() {
         // Coordinates of top-left and bottom-right points
         // Coordinate frame basis is on the top left corner
         let (x_tl, y_tl) = (bbox[0] * width, bbox[1] * height);
@@ -138,7 +142,25 @@ fn draw_bboxes_on_image(
             Rect::at(x_tl as i32, y_tl as i32).of_size(rect_width as u32, rect_height as u32);
 
         frame = draw_hollow_rect(&frame, face_rect, Rgb::from([0, 255, 0]));
+        frame = draw_text(
+            &mut frame,
+            color.clone(),
+            x_tl as u32,
+            y_tl as u32,
+            Scale { x: 16.0, y: 16.0 },
+            &font,
+            &format!("{:.2}%", confidence * 100.0),
+        );
     }
 
     frame
+}
+
+/// Load font.
+///
+/// The font data is actually compiled into the binary with the `include_bytes!` macro.
+fn load_font() -> Font<'static> {
+    let font_data: &[u8] = include_bytes!("../resources/DejaVuSansMono.ttf");
+    let font: Font<'static> = Font::try_from_bytes(font_data).unwrap();
+    return font;
 }
