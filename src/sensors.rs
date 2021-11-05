@@ -15,7 +15,7 @@ pub fn get_cam() -> Camera {
     cam
 }
 
-pub fn get_frame_fn(resolution: (u32, u32), format: &str) -> Box<dyn Fn() -> Frame> {
+pub fn get_capture_func(resolution: (u32, u32), format: &str) -> Box<dyn Fn() -> Frame> {
     let mut cam = get_cam();
 
     cam.start(&Config {
