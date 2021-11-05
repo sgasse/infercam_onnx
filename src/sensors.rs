@@ -1,8 +1,11 @@
+//! Camera sensors, save functions and callbacks to capture methods.
+
 use rscam::Frame;
 use rscam::{Camera, Config};
 use std::fs::File;
 use std::io::Write;
 
+/// Get camera at `/dev/video0` and log supported formats.
 pub fn get_cam() -> Camera {
     let cam_name = "/dev/video0";
     let cam = Camera::new(cam_name).unwrap();
@@ -15,6 +18,7 @@ pub fn get_cam() -> Camera {
     cam
 }
 
+/// Initialize camera and return a closure to the capture function.
 pub fn get_capture_func(resolution: (u32, u32), format: &str) -> Box<dyn Fn() -> Frame> {
     let mut cam = get_cam();
 
@@ -30,6 +34,7 @@ pub fn get_capture_func(resolution: (u32, u32), format: &str) -> Box<dyn Fn() ->
     Box::new(callback)
 }
 
+/// Capture and save `n` frames on disk.
 pub fn save_n_frames(n: u32) {
     let mut cam = get_cam();
 
@@ -51,6 +56,7 @@ pub fn save_n_frames(n: u32) {
 mod test {
     use super::save_n_frames;
 
+    /// Test capturing and saving one frame on disk.
     #[test]
     fn test_saving_frames() {
         save_n_frames(1);

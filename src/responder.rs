@@ -1,3 +1,11 @@
+//! Objects responding to endpoint calls.
+//!
+//! There are two main objects, both implement the `futures_core::Stream` trait:
+//! - `StreamableCamera` initializes the webcam and captures a new frame in its `poll_next` method.
+//! - `InferCamera` initializes both the webcam and a neural network model from an `.onnx` file.
+//!   In the `poll_next` method, every frame is passed through the network, the output postprocessed
+//!   and bounding boxes drawn onto the original frame.
+
 use actix_web::web::Bytes;
 use actix_web::Error;
 use futures_core::task::{Context, Poll};
@@ -13,11 +21,13 @@ use tract_onnx::prelude::{tvec, Arc, TVec, Tensor, TractResult};
 
 use super::nn::postproc_ultraface;
 
+/// Keep a handle to the capture function of an initialized camera.
 pub struct StreamableCamera {
     gen_frame: Box<dyn Fn() -> Frame>,
 }
 
 impl StreamableCamera {
+    /// Create a new instance.
     pub fn new(gen_frame: Box<dyn Fn() -> Frame>) -> StreamableCamera {
         StreamableCamera { gen_frame }
     }
@@ -50,6 +60,7 @@ pub struct InferCamera {
 }
 
 impl InferCamera {
+    /// Create a new instance.
     pub fn new(
         gen_frame: Box<dyn Fn() -> Frame>,
         infer_frame: Box<dyn Fn(TVec<Tensor>) -> TractResult<TVec<Arc<Tensor>>>>,
@@ -106,6 +117,7 @@ impl Stream for InferCamera {
     }
 }
 
+/// Draw bounding boxes on the image.
 fn draw_bboxes_on_image(
     mut frame: RgbImage,
     bboxes_with_confidences: Vec<([f32; 4], f32)>,
@@ -115,7 +127,7 @@ fn draw_bboxes_on_image(
     let (width, height) = (width as f32, height as f32);
 
     for (bbox, _confidence) in bboxes_with_confidences.iter() {
-        // Coordinates of top-left and botto-right points
+        // Coordinates of top-left and bottom-right points
         // Coordinate frame basis is on the top left corner
         let (x_tl, y_tl) = (bbox[0] * width, bbox[1] * height);
         let (x_br, y_br) = (bbox[2] * width, bbox[3] * height);
