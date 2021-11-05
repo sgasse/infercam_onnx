@@ -13,12 +13,21 @@ async fn index() -> impl Responder {
 <!DOCTYPE html>
 <html>
 <head>
-<title>Index</title>
+<title>InferCam</title>
+<style>
+body {
+    background-color: black;
+    color: white;
+    text-align: center;
+    font-family: sans-serif;
+}
+</style>
 </head>
 <body>
 <div class="container">
-    <h3>Streaming</h3>
-    <img src="./video_stream" width="100%">
+    <h3>Deep Learning Face Detection</h3>
+    <h4>Built with Rust, onnxruntime, and actix_web.</h4>
+    <img src="./face_detection" width="100%">
 </div>
 </body>
 </html>

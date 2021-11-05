@@ -137,7 +137,7 @@ fn draw_bboxes_on_image(
         let face_rect =
             Rect::at(x_tl as i32, y_tl as i32).of_size(rect_width as u32, rect_height as u32);
 
-        frame = draw_hollow_rect(&frame, face_rect, Rgb::from([255, 0, 0]));
+        frame = draw_hollow_rect(&frame, face_rect, Rgb::from([0, 255, 0]));
     }
 
     frame
