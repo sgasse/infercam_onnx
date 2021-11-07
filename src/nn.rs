@@ -198,41 +198,7 @@ fn bbox_area(bbox: &[f32; 4]) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        get_model_run_func, get_preproc_func, non_maximum_suppression,
-        sort_ultraface_output_ascending,
-    };
-    use tract_onnx::prelude::tvec;
-
-    /// Test the ultraface network inference with a set of known images with faces.
-    #[test]
-    fn run_ultraface_640_inference() {
-        let model_name = "ultraface-RFB-640";
-        let infer_func = get_model_run_func(model_name).unwrap();
-        let preproc_func = get_preproc_func(model_name).unwrap();
-
-        let images_with_num_faces = vec![
-            ("test_pics/bruce-mars-ZXq7xoo98b0-unsplash.jpg", 3),
-            ("test_pics/clarke-sanders-ybPJ47PMT_M-unsplash.jpg", 6),
-            ("test_pics/helena-lopes-e3OUQGT9bWU-unsplash.jpg", 4),
-            ("test_pics/kaleidico-d6rTXEtOclk-unsplash.jpg", 3),
-            ("test_pics/michael-dam-mEZ3PoFGs_k-unsplash.jpg", 1),
-            ("test_pics/mika-W0i1N6FdCWA-unsplash.jpg", 1),
-            ("test_pics/omar-lopez-T6zu4jFhVwg-unsplash.jpg", 10),
-        ];
-        for (filename, expected_num_faces) in images_with_num_faces.iter() {
-            let image = image::open(filename).unwrap().to_rgb8();
-
-            let result = infer_func(tvec!(preproc_func(image))).unwrap();
-
-            let sorted_output = sort_ultraface_output_ascending(result);
-            let bboxes_with_confidences = non_maximum_suppression(sorted_output, 0.5, 0.5);
-
-            let num_bboxes = bboxes_with_confidences.len() as i32;
-            println!("Number of bboxes found: {:?}", num_bboxes);
-            assert_eq!(num_bboxes, *expected_num_faces);
-        }
-    }
+    use super::non_maximum_suppression;
 
     #[test]
     fn test_nms_min_confidence() {
