@@ -132,31 +132,28 @@ fn non_maximum_suppression(
     max_iou: f32,
     min_confidence: f32,
 ) -> Vec<([f32; 4], f32)> {
-    if sorted_bboxes_with_confidences.len() < 2 {
-        // If we have zero or only one bounding box candidate, return it right away
-        return sorted_bboxes_with_confidences;
-    }
-
-    // Choose most confident bbox (from the back of the ascending-sorted vector)
-    let mut selected = vec![sorted_bboxes_with_confidences.pop().unwrap()];
+    let mut selected = vec![];
     'candidates: loop {
-        // Get next most confident bbox
-        if let Some((bbox, confidence)) = sorted_bboxes_with_confidences.pop() {
-            // Early exit when we get to low confidences
-            if confidence < min_confidence {
-                break 'candidates;
-            }
-
-            // Check for overlap with any of the selected bboxes
-            for (selected_bbox, _) in selected.iter() {
-                match iou(&bbox, selected_bbox) {
-                    x if x > max_iou => continue 'candidates,
-                    _ => (),
+        // Get next most confident bbox from the back of ascending-sorted vector
+        match sorted_bboxes_with_confidences.pop() {
+            Some((bbox, confidence)) => {
+                // Early exit when confidences are below what we expect
+                if confidence < min_confidence {
+                    break 'candidates;
                 }
-            }
 
-            // bbox has no large overlap with any of the selected ones, add it
-            selected.push((bbox, confidence))
+                // Check for overlap with any of the selected bboxes
+                for (selected_bbox, _) in selected.iter() {
+                    match iou(&bbox, selected_bbox) {
+                        x if x > max_iou => continue 'candidates,
+                        _ => (),
+                    }
+                }
+
+                // bbox has no large overlap with any of the selected ones, add it
+                selected.push((bbox, confidence))
+            }
+            None => break 'candidates,
         }
     }
 
@@ -235,5 +232,55 @@ mod tests {
             println!("Number of bboxes found: {:?}", num_bboxes);
             assert_eq!(num_bboxes, *expected_num_faces);
         }
+    }
+
+    #[test]
+    fn test_nms_min_confidence() {
+        let sorted_bboxes_with_confidences = vec![
+            ([1.0, 1.0, 2.0, 2.0], 0.3), // this candidate should be filtered out
+            ([3.0, 3.0, 4.0, 4.0], 0.8), // this candidate should be kept
+        ];
+        let filtered_bboxes_with_conf =
+            non_maximum_suppression(sorted_bboxes_with_confidences, 0.5, 0.5);
+        assert_eq!(filtered_bboxes_with_conf, vec![([3.0, 3.0, 4.0, 4.0], 0.8)]);
+    }
+
+    #[test]
+    fn test_nms_max_iou() {
+        let sorted_bboxes_with_confidences = vec![
+            ([4.0, 4.0, 8.0, 8.0], 0.6), // this should be filtered due to too high IoU
+            ([1.0, 1.0, 2.0, 2.0], 0.7), // unrelated candidate, should be kept
+            ([5.5, 4.0, 8.5, 8.0], 0.9), // this is the first selected
+        ];
+        let filtered_bboxes_with_conf =
+            non_maximum_suppression(sorted_bboxes_with_confidences, 0.5, 0.5);
+        assert_eq!(
+            filtered_bboxes_with_conf,
+            vec![
+                // the order is reversed
+                ([5.5, 4.0, 8.5, 8.0], 0.9),
+                ([1.0, 1.0, 2.0, 2.0], 0.7),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_nms_all_low_confidence() {
+        let sorted_bboxes_with_confidences = vec![
+            ([4.0, 4.0, 8.0, 8.0], 0.3),
+            ([1.0, 1.0, 2.0, 2.0], 0.4),
+            ([5.5, 4.0, 8.5, 8.0], 0.55),
+        ];
+        let filtered_bboxes_with_conf =
+            non_maximum_suppression(sorted_bboxes_with_confidences, 0.5, 0.6);
+        assert_eq!(filtered_bboxes_with_conf, vec![]);
+    }
+
+    #[test]
+    fn test_nms_empty_input() {
+        let sorted_bboxes_with_confidences = vec![];
+        let filtered_bboxes_with_conf =
+            non_maximum_suppression(sorted_bboxes_with_confidences, 0.5, 0.5);
+        assert_eq!(filtered_bboxes_with_conf, vec![]);
     }
 }
