@@ -1,7 +1,7 @@
 use actix_web::App;
 use actix_web::HttpServer;
 use env_logger::TimestampPrecision;
-use libwebcam_onnx::routes::{face_detection, index, video_stream};
+use libinfercam_onnx::routes::{face_detection, index, video_stream};
 use structopt::StructOpt;
 
 #[derive(StructOpt)]

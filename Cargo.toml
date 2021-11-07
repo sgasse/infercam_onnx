@@ -1,14 +1,14 @@
 [package]
-name = "webcam_onnx"
+name = "infercam_onnx"
 version = "0.2.1"
 edition = "2018"
 
 [lib]
-name = "libwebcam_onnx"
+name = "libinfercam_onnx"
 path = "src/lib.rs"
 
 [[bin]]
-name = "webcam_onnx"
+name = "infercam_onnx"
 path = "src/main.rs"
 
 [dependencies]
