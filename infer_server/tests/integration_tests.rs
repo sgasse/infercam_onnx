@@ -1,11 +1,11 @@
 use infer_server::nn::{InferModel, UltrafaceModel};
 use std::path::Path;
 
-#[test]
-fn test_ultraface_640() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::test]
+async fn test_ultraface_640() -> Result<(), Box<dyn std::error::Error>> {
     let current_workdir = std::env::current_dir()?;
     println!("Running with workdir {}", current_workdir.display());
-    let model = UltrafaceModel::new()?;
+    let model = UltrafaceModel::new().await?;
 
     // `cargo test` and debugging the test via IDE have differing work dirs
     let test_pic_dir = {
