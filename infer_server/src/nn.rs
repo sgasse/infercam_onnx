@@ -7,12 +7,13 @@ type Error = Box<dyn std::error::Error>;
 
 type NnModel = SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>;
 type NnOut = SmallVec<[Arc<Tensor>; 4]>;
+type Bbox = [f32; 4];
 
 /// Positive additive constant to avoid divide-by-zero.
 const EPS: f32 = 1.0e-7;
 
 pub trait InferModel {
-    fn run(&self, input: RgbImage) -> Result<(), Error>;
+    fn run(&self, input: RgbImage) -> Result<Vec<(Bbox, f32)>, Error>;
 }
 
 pub struct UltrafaceModel {
@@ -59,7 +60,7 @@ impl UltrafaceModel {
         tensor
     }
 
-    fn postproc(&self, raw_nn_out: NnOut) -> Result<(), Error> {
+    fn postproc(&self, raw_nn_out: NnOut) -> Result<Vec<(Bbox, f32)>, Error> {
         // TODO: Document output
         let confidences = raw_nn_out[0]
             .to_array_view::<f32>()?
@@ -71,7 +72,7 @@ impl UltrafaceModel {
             .iter()
             .cloned()
             .collect();
-        let bboxes: Vec<[f32; 4]> = bboxes.chunks(4).map(|x| x.try_into().unwrap()).collect();
+        let bboxes: Vec<Bbox> = bboxes.chunks(4).map(|x| x.try_into().unwrap()).collect();
 
         let mut bboxes_with_confidences: Vec<_> = bboxes
             .iter()
@@ -86,19 +87,17 @@ impl UltrafaceModel {
 
         let selected_bboxes = non_maximum_suppression(bboxes_with_confidences, self.max_iou);
 
-        dbg!(&selected_bboxes);
-
-        Ok(())
+        Ok(selected_bboxes)
     }
 }
 
 impl InferModel for UltrafaceModel {
-    fn run(&self, input: RgbImage) -> Result<(), Error> {
+    fn run(&self, input: RgbImage) -> Result<Vec<(Bbox, f32)>, Error> {
         let valid_input = tvec!(self.preproc(input));
         let raw_nn_out = self.model.run(valid_input)?;
-        self.postproc(raw_nn_out)?;
+        let selected_bboxes = self.postproc(raw_nn_out)?;
 
-        Ok(())
+        Ok(selected_bboxes)
     }
 }
 
@@ -123,9 +122,9 @@ fn get_ultraface_model() -> Result<NnModel, Error> {
 /// the computation at a minimum confidence score and discard all candidates less certain than
 /// `min_confidence`.
 fn non_maximum_suppression(
-    mut sorted_bboxes_with_confidences: Vec<(&[f32; 4], &f32)>,
+    mut sorted_bboxes_with_confidences: Vec<(&Bbox, &f32)>,
     max_iou: f32,
-) -> Vec<([f32; 4], f32)> {
+) -> Vec<(Bbox, f32)> {
     let mut selected = vec![];
     'candidates: loop {
         // Get next most confident bbox from the back of ascending-sorted vector.
@@ -151,12 +150,12 @@ fn non_maximum_suppression(
 }
 
 /// Calculate the intersection-over-union metric for two bounding boxes.
-fn iou(bbox_a: &[f32; 4], bbox_b: &[f32; 4]) -> f32 {
+fn iou(bbox_a: &Bbox, bbox_b: &Bbox) -> f32 {
     // Calculate corner points of overlap box
     // If the boxes do not overlap, the corner-points will be ill defined, i.e. the top left
     // corner point will be below and to the right of the bottom right corner point. In this case,
     // the area will be zero.
-    let overlap_box: [f32; 4] = [
+    let overlap_box: Bbox = [
         f32::max(bbox_a[0], bbox_b[0]),
         f32::max(bbox_a[1], bbox_b[1]),
         f32::min(bbox_a[2], bbox_b[2]),
@@ -175,7 +174,7 @@ fn iou(bbox_a: &[f32; 4], bbox_b: &[f32; 4]) -> f32 {
 /// `[x_top_left, y_top_left, x_bottom_right, y_bottom_right]`
 /// If the bounding box is ill-defined by having the bottom-right point above/to the left of the
 /// top-left point, the area is zero.
-fn bbox_area(bbox: &[f32; 4]) -> f32 {
+fn bbox_area(bbox: &Bbox) -> f32 {
     let width = bbox[3] - bbox[1];
     let height = bbox[2] - bbox[0];
     if width < 0.0 || height < 0.0 {
