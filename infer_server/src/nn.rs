@@ -73,18 +73,18 @@ impl UltrafaceModel {
             .collect();
         let bboxes: Vec<[f32; 4]> = bboxes.chunks(4).map(|x| x.try_into().unwrap()).collect();
 
-        let mut confidences_with_bboxes: Vec<_> = confidences
+        let mut bboxes_with_confidences: Vec<_> = bboxes
             .iter()
-            .zip(bboxes.iter())
-            .filter_map(|(confidence, bbox)| match confidence {
-                x if *x > self.min_confidence => Some((confidence, bbox)),
+            .zip(confidences.iter())
+            .filter_map(|(bbox, confidence)| match confidence {
+                x if *x > self.min_confidence => Some((bbox, confidence)),
                 _ => None,
             })
             .collect();
 
-        confidences_with_bboxes.sort_by(|a, b| a.0.partial_cmp(b.0).unwrap());
+        bboxes_with_confidences.sort_by(|a, b| a.1.partial_cmp(b.1).unwrap());
 
-        let selected_bboxes = non_maximum_suppression(confidences_with_bboxes, self.max_iou);
+        let selected_bboxes = non_maximum_suppression(bboxes_with_confidences, self.max_iou);
 
         dbg!(&selected_bboxes);
 
@@ -123,17 +123,17 @@ fn get_ultraface_model() -> Result<NnModel, Error> {
 /// the computation at a minimum confidence score and discard all candidates less certain than
 /// `min_confidence`.
 fn non_maximum_suppression(
-    mut sorted_bboxes_with_confidences: Vec<(&f32, &[f32; 4])>,
+    mut sorted_bboxes_with_confidences: Vec<(&[f32; 4], &f32)>,
     max_iou: f32,
-) -> Vec<(f32, [f32; 4])> {
+) -> Vec<([f32; 4], f32)> {
     let mut selected = vec![];
     'candidates: loop {
         // Get next most confident bbox from the back of ascending-sorted vector.
         // All boxes fulfill the minimum confidence criterium.
         match sorted_bboxes_with_confidences.pop() {
-            Some((confidence, bbox)) => {
+            Some((bbox, confidence)) => {
                 // Check for overlap with any of the selected bboxes
-                for (_, selected_bbox) in selected.iter() {
+                for (selected_bbox, _) in selected.iter() {
                     match iou(&bbox, selected_bbox) {
                         x if x > max_iou => continue 'candidates,
                         _ => (),
@@ -141,7 +141,7 @@ fn non_maximum_suppression(
                 }
 
                 // bbox has no large overlap with any of the selected ones, add it
-                selected.push((confidence.clone(), bbox.clone()))
+                selected.push((bbox.clone(), confidence.clone()))
             }
             None => break 'candidates,
         }
