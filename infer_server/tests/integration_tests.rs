@@ -5,7 +5,7 @@ use std::path::Path;
 async fn test_ultraface_640() -> Result<(), Box<dyn std::error::Error>> {
     let current_workdir = std::env::current_dir()?;
     println!("Running with workdir {}", current_workdir.display());
-    let model = UltrafaceModel::new().await?;
+    let model = UltrafaceModel::new(infer_server::nn::UltrafaceVariant::W640H480).await?;
 
     // `cargo test` and debugging the test via IDE have differing work dirs
     let test_pic_dir = {

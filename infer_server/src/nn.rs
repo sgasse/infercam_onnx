@@ -12,9 +12,15 @@ type Bbox = [f32; 4];
 const EPS: f32 = 1.0e-7;
 
 const ULTRAFACE_LINK_640: &'static str = "https://github.com/onnx/models/raw/main/vision/body_analysis/ultraface/models/version-RFB-640.onnx";
+const ULTRAFACE_LINK_320: &'static str = "https://github.com/onnx/models/raw/main/vision/body_analysis/ultraface/models/version-RFB-320.onnx";
 
 pub trait InferModel {
     fn run(&self, input: RgbImage) -> Result<Vec<(Bbox, f32)>, Error>;
+}
+
+pub enum UltrafaceVariant {
+    W640H480,
+    W320H240,
 }
 
 pub struct UltrafaceModel {
@@ -26,13 +32,18 @@ pub struct UltrafaceModel {
 }
 
 impl UltrafaceModel {
-    pub async fn new() -> Result<Self, Error> {
-        let model = get_ultraface_model().await?;
+    pub async fn new(variant: UltrafaceVariant) -> Result<Self, Error> {
+        let (width, height) = match variant {
+            UltrafaceVariant::W640H480 => (640, 480),
+            UltrafaceVariant::W320H240 => (320, 240),
+        };
+        let model = Self::get_model(&variant, width, height).await?;
         println!("Initialized Ultraface model");
+
         Ok(Self {
             model,
-            width: 640,
-            height: 480,
+            width,
+            height,
             // TODO: As input variable
             max_iou: 0.5,
             min_confidence: 0.5,
@@ -91,6 +102,40 @@ impl UltrafaceModel {
 
         Ok(selected_bboxes)
     }
+
+    async fn get_model(
+        variant: &UltrafaceVariant,
+        width: u32,
+        height: u32,
+    ) -> Result<NnModel, Error> {
+        let (model_name, download_link) = match variant {
+            UltrafaceVariant::W640H480 => ("ultraface-RFB-640.onnx", ULTRAFACE_LINK_640),
+            UltrafaceVariant::W320H240 => ("ultraface-RFB-320.onnx", ULTRAFACE_LINK_320),
+        };
+
+        let model_file_dir = dirs::cache_dir().expect("cache dir").join("infercam_onnx");
+        if !model_file_dir.is_dir() {
+            std::fs::create_dir(&model_file_dir)?;
+        }
+
+        let model_file_path = model_file_dir.join(model_name);
+        if !model_file_path.is_file() {
+            let client = reqwest::Client::new();
+            println!("Downloading Ultraface model...");
+            download_file(&client, download_link, &model_file_path).await?;
+            println!("Download complete");
+        }
+
+        let input_fact =
+            InferenceFact::dt_shape(f32::datum_type(), tvec!(1, 3, height as i32, width as i32));
+        let model = tract_onnx::onnx()
+            .model_for_path(model_file_path)?
+            .with_input_fact(0, input_fact)?
+            .into_optimized()?
+            .into_runnable()?;
+
+        Ok(model)
+    }
 }
 
 impl InferModel for UltrafaceModel {
@@ -101,27 +146,6 @@ impl InferModel for UltrafaceModel {
 
         Ok(selected_bboxes)
     }
-}
-
-async fn get_ultraface_model() -> Result<NnModel, Error> {
-    let model_file_dir = dirs::cache_dir().expect("cache dir").join("infercam_onnx");
-    if !model_file_dir.is_dir() {
-        std::fs::create_dir(&model_file_dir)?;
-    }
-    let model_file_path = model_file_dir.join("ultraface-RFB-640.onnx");
-    if !model_file_path.is_file() {
-        let client = reqwest::Client::new();
-        download_file(&client, ULTRAFACE_LINK_640, &model_file_path).await?;
-    }
-
-    let input_fact = InferenceFact::dt_shape(f32::datum_type(), tvec!(1, 3, 480, 640));
-    let model = tract_onnx::onnx()
-        .model_for_path(model_file_path)?
-        .with_input_fact(0, input_fact)?
-        .into_optimized()?
-        .into_runnable()?;
-
-    Ok(model)
 }
 
 /// Run non-maximum-suppression on candidate bounding boxes.

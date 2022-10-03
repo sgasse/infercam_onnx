@@ -13,7 +13,9 @@ use serde::Deserialize;
 async fn main() {
     println!("Let's get started!");
 
-    let model = UltrafaceModel::new().await.expect("Initialize model");
+    let model = UltrafaceModel::new(infer_server::nn::UltrafaceVariant::W320H240)
+        .await
+        .expect("Initialize model");
 
     let app = Router::new()
         .route("/healthcheck", get(healthcheck))
