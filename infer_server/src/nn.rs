@@ -1,9 +1,8 @@
+use crate::{utils::download_file, Error};
 use image::RgbImage;
 use ndarray::s;
 use smallvec::SmallVec;
 use tract_onnx::prelude::*;
-
-type Error = Box<dyn std::error::Error>;
 
 type NnModel = SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>;
 type NnOut = SmallVec<[Arc<Tensor>; 4]>;
@@ -11,6 +10,8 @@ type Bbox = [f32; 4];
 
 /// Positive additive constant to avoid divide-by-zero.
 const EPS: f32 = 1.0e-7;
+
+const ULTRAFACE_LINK_640: &'static str = "https://github.com/onnx/models/raw/main/vision/body_analysis/ultraface/models/version-RFB-640.onnx";
 
 pub trait InferModel {
     fn run(&self, input: RgbImage) -> Result<Vec<(Bbox, f32)>, Error>;
@@ -25,8 +26,9 @@ pub struct UltrafaceModel {
 }
 
 impl UltrafaceModel {
-    pub fn new() -> Result<Self, Error> {
-        let model = get_ultraface_model()?;
+    pub async fn new() -> Result<Self, Error> {
+        let model = get_ultraface_model().await?;
+        println!("Initialized Ultraface model");
         Ok(Self {
             model,
             width: 640,
@@ -101,11 +103,20 @@ impl InferModel for UltrafaceModel {
     }
 }
 
-fn get_ultraface_model() -> Result<NnModel, Error> {
-    let filename = "ultraface-RFB-640.onnx";
+async fn get_ultraface_model() -> Result<NnModel, Error> {
+    let model_file_dir = dirs::cache_dir().expect("cache dir").join("infercam_onnx");
+    if !model_file_dir.is_dir() {
+        std::fs::create_dir(&model_file_dir)?;
+    }
+    let model_file_path = model_file_dir.join("ultraface-RFB-640.onnx");
+    if !model_file_path.is_file() {
+        let client = reqwest::Client::new();
+        download_file(&client, ULTRAFACE_LINK_640, &model_file_path).await?;
+    }
+
     let input_fact = InferenceFact::dt_shape(f32::datum_type(), tvec!(1, 3, 480, 640));
     let model = tract_onnx::onnx()
-        .model_for_path(filename)?
+        .model_for_path(model_file_path)?
         .with_input_fact(0, input_fact)?
         .into_optimized()?
         .into_runnable()?;

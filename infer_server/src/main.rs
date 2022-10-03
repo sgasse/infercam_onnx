@@ -6,11 +6,14 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use infer_server::nn::UltrafaceModel;
 use serde::Deserialize;
 
 #[tokio::main]
 async fn main() {
     println!("Let's get started!");
+
+    let model = UltrafaceModel::new().await.expect("Initialize model");
 
     let app = Router::new()
         .route("/healthcheck", get(healthcheck))
