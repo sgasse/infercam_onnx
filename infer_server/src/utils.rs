@@ -7,8 +7,6 @@ pub async fn download_file(
     url: &str,
     filepath: impl AsRef<std::path::Path>,
 ) -> Result<(), Error> {
-    // Setup download with reqwest
-    println!("Downloading {}", url);
     let resp = client.get(url).send().await?;
 
     let mut file = File::create(filepath)?;
