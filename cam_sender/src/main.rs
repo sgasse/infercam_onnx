@@ -1,18 +1,60 @@
+use cam_sender::{
+    sensors::{get_capture_fn, StreamableCamera},
+    Error,
+};
+use env_logger::TimestampPrecision;
+use futures_core::Stream;
 use reqwest::{multipart, Body};
+use tokio::sync::mpsc;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Error> {
     println!("Let's send some stuff!");
 
-    let chunks: Vec<Result<_, std::io::Error>> = vec![Ok("hello"), Ok(" "), Ok("you"), Ok("coder")];
+    env_logger::builder()
+        .format_timestamp(Some(TimestampPrecision::Millis))
+        .init();
 
-    let stream = futures_util::stream::iter(chunks);
+    let capture_fn = get_capture_fn("/dev/video0", (1280, 720), "MJPG", (2, 1))?;
+    let s_cam = StreamableCamera::new(capture_fn);
 
-    let chunk = multipart::Part::stream(Body::wrap_stream(stream));
+    println!("Got through cam init");
 
-    let form = multipart::Form::new()
-        .text("session", "1")
-        .part("chunk", chunk);
+    // let (tx, mut rx) = mpsc::channel(100);
+
+    // tokio::spawn(async move {
+    //     loop {
+    //         match s_cam.capture() {
+    //             Ok(frame) => {
+    //                 log::info!("Got frame");
+    //                 tx.send(frame).await;
+    //             }
+    //             Err(e) => {
+    //                 log::error!("Error getting frame {:?}", e);
+    //             }
+    //         }
+    //     }
+    // });
+
+    // let stream = async_stream::stream! {
+    //     while let Some(item) = rx.recv().await {
+    //         yield item;
+    //     }
+    // };
+
+    // let chunks = vec!["hello", " ", "you", " ", "coder"];
+
+    // let stream = futures_util::stream::iter(
+    //     chunks
+    //         .into_iter()
+    //         .map(|v| Ok(v))
+    //         .collect::<Vec<Result<_, std::io::Error>>>(),
+    // );
+
+    // let chunk = multipart::Part::stream(Body::wrap_stream(stream));
+    let chunk = multipart::Part::stream(Body::wrap_stream(s_cam));
+
+    let form = multipart::Form::new().part("chunk", chunk);
 
     reqwest::Client::new()
         .post("http://127.0.0.1:3000/chunks")
@@ -20,4 +62,6 @@ async fn main() {
         .send()
         .await
         .unwrap();
+
+    Ok(())
 }
