@@ -5,7 +5,7 @@ use axum::{
     Extension, Json, Router,
 };
 use env_logger::TimestampPrecision;
-use infer_server::nn::UltrafaceModel;
+use infer_server::{endpoints::named_stream, nn::UltrafaceModel};
 use infer_server::{endpoints::recv_named_jpg_streams, pubsub::NamedPubSub};
 use serde::Deserialize;
 use std::{net::SocketAddr, sync::Arc};
@@ -28,6 +28,7 @@ async fn main() {
         .route("/healthcheck", get(healthcheck))
         .route("/post_frame", post(post_frames))
         .route("/post_jpgs", post(recv_named_jpg_streams))
+        .route("/stream", get(named_stream))
         .layer(Extension(pubsub));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));

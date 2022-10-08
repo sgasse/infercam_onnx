@@ -1,9 +1,12 @@
 use crate::pubsub::NamedPubSub;
 use axum::{
+    body::StreamBody,
     extract::{BodyStream, Query},
+    http::header::{self},
+    response::IntoResponse,
     Extension,
 };
-use futures::stream::StreamExt;
+use futures::{stream::StreamExt, Stream};
 use serde::Deserialize;
 use std::io::Cursor;
 use std::io::Write;
@@ -13,6 +16,31 @@ use std::{fs::File, sync::Arc};
 pub struct RecvJpgsParams {
     #[serde(default)]
     name: Option<String>,
+}
+
+pub async fn named_stream(
+    Extension(pubsub): Extension<Arc<NamedPubSub>>,
+    Query(params): Query<RecvJpgsParams>,
+) -> impl IntoResponse {
+    let name = params.name.unwrap_or("unknown".into());
+    log::debug!("Stream for {} requested", &name);
+
+    let mut rx = pubsub.get_receiver(&name).await;
+
+    let stream = async_stream::stream! {
+        // while let Ok(item) = rx.recv().await {
+        loop {
+            log::debug!("Next iteration");
+            use std::time::Duration;
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            yield Ok::<_, std::io::Error>("hello");
+        }
+    };
+
+    let body = StreamBody::new(stream);
+    let headers = [(header::CONTENT_TYPE, "text/plain")];
+
+    (headers, body)
 }
 
 pub async fn recv_named_jpg_streams(
