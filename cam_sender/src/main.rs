@@ -15,10 +15,10 @@ async fn main() -> Result<(), Error> {
         .format_timestamp(Some(TimestampPrecision::Millis))
         .init();
 
-    let capture_fn = get_capture_fn("/dev/video0", (1280, 720), "MJPG", (2, 1))?;
+    let capture_fn = get_capture_fn("/dev/video0", (1280, 720), "MJPG", (1, 30))?;
     let s_cam = StreamableCamera::new(capture_fn);
 
-    println!("Got through cam init");
+    // println!("Got through cam init");
 
     // let (tx, mut rx) = mpsc::channel(100);
 
@@ -52,6 +52,11 @@ async fn main() -> Result<(), Error> {
     // );
 
     // let chunk = multipart::Part::stream(Body::wrap_stream(stream));
+    // let (mut tx, mut rx) = futures::channel::mpsc::channel(100);
+    // use futures::SinkExt;
+    // tx.send(Ok::<_, std::io::Error>(1)).await?;
+    // tx.send(Ok::<_, std::io::Error>(2)).await?;
+
     let chunk = multipart::Part::stream(Body::wrap_stream(s_cam));
 
     let form = multipart::Form::new().part("chunk", chunk);

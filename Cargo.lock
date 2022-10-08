@@ -580,6 +580,7 @@ dependencies = [
  "async-stream",
  "bytes 1.2.1",
  "env_logger",
+ "futures",
  "futures-core",
  "futures-util",
  "log",
