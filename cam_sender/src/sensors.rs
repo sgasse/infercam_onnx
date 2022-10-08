@@ -58,18 +58,14 @@ impl Stream for StreamableCamera {
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match (*self.capture_fn)() {
             Some(frame) => {
-                // TODO: Remove
-                let frame = "hello".as_bytes();
-                let body: Bytes = Bytes::copy_from_slice(
-                    &[
-                        "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
-                        &frame[..],
-                        "\r\n\r\n".as_bytes(),
-                    ]
-                    .concat(),
-                );
+                // TODO Remove
+                use std::time::Duration;
+                std::thread::sleep(Duration::from_secs(2));
 
-                log::debug!("Streaming...");
+                // Append `\n\n` to mark the end of a frame
+                let body = Bytes::copy_from_slice(&[&frame[..], "\n\n".as_bytes()].concat());
+
+                log::debug!("Streaming... ({} bytes)", body.len());
 
                 Poll::Ready(Some(Ok(body)))
             }
