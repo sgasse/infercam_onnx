@@ -1477,6 +1477,7 @@ version = "0.1.0"
 dependencies = [
  "async-stream",
  "axum",
+ "bytes 1.2.1",
  "dirs",
  "env_logger",
  "futures",
