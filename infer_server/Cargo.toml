@@ -9,8 +9,9 @@ name = "infer_server"
 path = "src/lib.rs"
 
 [dependencies]
-axum = "0.5.16"
+axum = { version = "0.5.16", features = ["multipart"] }
 dirs = "4.0.0"
+futures = "0.3.24"
 image = "0.24.4"
 ndarray = "0.15.6"
 reqwest = { version = "0.11.12", features = ["stream"] }
