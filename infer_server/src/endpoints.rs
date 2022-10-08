@@ -3,9 +3,10 @@ use axum::{
     body::StreamBody,
     extract::{BodyStream, Query},
     http::header::{self},
-    response::IntoResponse,
+    response::{Html, IntoResponse},
     Extension,
 };
+use bytes::Bytes;
 use futures::{stream::StreamExt, Stream};
 use serde::Deserialize;
 use std::io::Cursor;
@@ -28,17 +29,27 @@ pub async fn named_stream(
     let mut rx = pubsub.get_receiver(&name).await;
 
     let stream = async_stream::stream! {
-        // while let Ok(item) = rx.recv().await {
-        loop {
+        while let Ok(item) = rx.recv().await {
+        // loop {
             log::debug!("Next iteration");
-            use std::time::Duration;
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            yield Ok::<_, std::io::Error>("hello");
+            // use std::time::Duration;
+            // tokio::time::sleep(Duration::from_secs(1)).await;
+            let data: Bytes = Bytes::copy_from_slice(
+                &[
+                    "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
+                    &item[..],
+                    "\r\n\r\n".as_bytes(),
+                ].concat()
+            );
+            yield Ok::<_, std::io::Error>(data);
         }
     };
 
     let body = StreamBody::new(stream);
-    let headers = [(header::CONTENT_TYPE, "text/plain")];
+    let headers = [(
+        header::CONTENT_TYPE,
+        "multipart/x-mixed-replace; boundary=frame",
+    )];
 
     (headers, body)
 }
