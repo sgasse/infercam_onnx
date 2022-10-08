@@ -9,7 +9,7 @@ name = "infer_server"
 path = "src/lib.rs"
 
 [dependencies]
-axum = { version = "0.5.16", features = ["multipart"] }
+axum = { version = "0.5.16", features = ["multipart", "query"] }
 dirs = "4.0.0"
 env_logger = "0.9.1"
 futures = "0.3.24"
