@@ -16,7 +16,6 @@ pub fn get_capture_fn(
     format: &str,
     frame_rate: (u32, u32),
 ) -> Result<CaptureFn, Error> {
-    // let cam_name = "/dev/video0";
     let mut cam = Camera::new(device_name)?;
 
     log::info!("Using camera {}", device_name);
@@ -57,37 +56,28 @@ impl Stream for StreamableCamera {
     type Item = Result<Bytes, std::io::Error>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // match (*self.capture_fn)() {
-        //     Some(frame) => {
-        //         // let body: Bytes = Bytes::copy_from_slice(
-        //         //     &[
-        //         //         "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
-        //         //         &frame[..],
-        //         //         "\r\n\r\n".as_bytes(),
-        //         //     ]
-        //         //     .concat(),
-        //         // );
-        //         use std::time::Duration;
-        //         std::thread::sleep(Duration::from_secs(1));
-        //         let body: Bytes = "Hello".into();
+        match (*self.capture_fn)() {
+            Some(frame) => {
+                // TODO: Remove
+                let frame = "hello".as_bytes();
+                let body: Bytes = Bytes::copy_from_slice(
+                    &[
+                        "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
+                        &frame[..],
+                        "\r\n\r\n".as_bytes(),
+                    ]
+                    .concat(),
+                );
 
-        //         log::debug!("Streaming...");
+                log::debug!("Streaming...");
 
-        //         Poll::Ready(Some(Ok(body)))
-        //     }
-        //     None => {
-        //         log::error!("Error capturing frame");
-        //         Poll::Ready(None)
-        //     }
-
-        // }
-        use std::time::Duration;
-        std::thread::sleep(Duration::from_secs(1));
-        let body: Bytes = "Hello".into();
-
-        log::debug!("Streaming...");
-
-        Poll::Ready(Some(Ok(body)))
+                Poll::Ready(Some(Ok(body)))
+            }
+            None => {
+                log::error!("Error capturing frame");
+                Poll::Ready(None)
+            }
+        }
     }
 }
 
@@ -105,6 +95,11 @@ mod test {
         println!("Supported formats:");
         for format in cam.formats() {
             dbg!(format?);
+        }
+
+        println!("Supported interval:");
+        for interval in cam.intervals("MJPG".as_bytes(), (1280, 720)) {
+            dbg!(interval);
         }
 
         Ok(())

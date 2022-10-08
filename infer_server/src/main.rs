@@ -22,7 +22,7 @@ async fn main() {
     let app = Router::new()
         .route("/healthcheck", get(healthcheck))
         .route("/post_frame", post(post_frames))
-        .route("/chunks", post(recv_stream2));
+        .route("/post_jpgs", post(recv_jpgs));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 
@@ -47,17 +47,7 @@ struct Frame {
     data: Vec<u8>,
 }
 
-async fn recv_stream(mut multipart: Multipart) {
-    while let Some(mut field) = multipart.next_field().await.unwrap() {
-        let name = field.name().unwrap().to_string();
-        let data = field.bytes().await.unwrap();
-
-        dbg!(name);
-        dbg!(data);
-    }
-}
-
-async fn recv_stream2(mut stream: BodyStream) {
+async fn recv_jpgs(mut stream: BodyStream) {
     while let Some(chunk) = stream.next().await {
         dbg!(chunk);
     }
