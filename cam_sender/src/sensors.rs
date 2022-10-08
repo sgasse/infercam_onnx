@@ -54,29 +54,40 @@ impl StreamableCamera {
 }
 
 impl Stream for StreamableCamera {
-    type Item = Result<Bytes, String>;
+    type Item = Result<Bytes, std::io::Error>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match (*self.capture_fn)() {
-            Some(frame) => {
-                let body: Bytes = Bytes::copy_from_slice(
-                    &[
-                        "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
-                        &frame[..],
-                        "\r\n\r\n".as_bytes(),
-                    ]
-                    .concat(),
-                );
+        // match (*self.capture_fn)() {
+        //     Some(frame) => {
+        //         // let body: Bytes = Bytes::copy_from_slice(
+        //         //     &[
+        //         //         "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
+        //         //         &frame[..],
+        //         //         "\r\n\r\n".as_bytes(),
+        //         //     ]
+        //         //     .concat(),
+        //         // );
+        //         use std::time::Duration;
+        //         std::thread::sleep(Duration::from_secs(1));
+        //         let body: Bytes = "Hello".into();
 
-                log::debug!("Streaming...");
+        //         log::debug!("Streaming...");
 
-                Poll::Ready(Some(Ok(body)))
-            }
-            None => {
-                log::error!("Error capturing frame");
-                Poll::Ready(None)
-            }
-        }
+        //         Poll::Ready(Some(Ok(body)))
+        //     }
+        //     None => {
+        //         log::error!("Error capturing frame");
+        //         Poll::Ready(None)
+        //     }
+
+        // }
+        use std::time::Duration;
+        std::thread::sleep(Duration::from_secs(1));
+        let body: Bytes = "Hello".into();
+
+        log::debug!("Streaming...");
+
+        Poll::Ready(Some(Ok(body)))
     }
 }
 
