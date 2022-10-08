@@ -21,7 +21,7 @@ async fn main() -> Result<(), Error> {
     let form = multipart::Form::new().part("chunk", chunk);
 
     reqwest::Client::new()
-        .post("http://127.0.0.1:3000/post_jpgs")
+        .post("http://127.0.0.1:3000/post_jpgs?name=simon")
         .multipart(form)
         .send()
         .await

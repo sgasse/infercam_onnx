@@ -2,13 +2,13 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
-    Json, Router,
+    Extension, Json, Router,
 };
 use env_logger::TimestampPrecision;
-use infer_server::endpoints::recv_jpgs;
 use infer_server::nn::UltrafaceModel;
+use infer_server::{endpoints::recv_named_jpg_streams, pubsub::NamedPubSub};
 use serde::Deserialize;
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 #[tokio::main]
 async fn main() {
@@ -22,10 +22,13 @@ async fn main() {
     //     .await
     //     .expect("Initialize model");
 
+    let pubsub = Arc::new(NamedPubSub::new());
+
     let app = Router::new()
         .route("/healthcheck", get(healthcheck))
         .route("/post_frame", post(post_frames))
-        .route("/post_jpgs", post(recv_jpgs));
+        .route("/post_jpgs", post(recv_named_jpg_streams))
+        .layer(Extension(pubsub));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 

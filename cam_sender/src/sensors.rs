@@ -64,6 +64,7 @@ impl Stream for StreamableCamera {
 
                 // Append `\n\n` to mark the end of a frame
                 let body = Bytes::copy_from_slice(&[&frame[..], "\n\n".as_bytes()].concat());
+                // let body = Bytes::copy_from_slice(&["test".as_bytes(), "\n\n".as_bytes()].concat());
 
                 log::debug!("Streaming... ({} bytes)", body.len());
 
