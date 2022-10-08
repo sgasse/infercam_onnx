@@ -11,8 +11,10 @@ path = "src/lib.rs"
 [dependencies]
 axum = { version = "0.5.16", features = ["multipart"] }
 dirs = "4.0.0"
+env_logger = "0.9.1"
 futures = "0.3.24"
 image = "0.24.4"
+log = "0.4.17"
 ndarray = "0.15.6"
 reqwest = { version = "0.11.12", features = ["stream"] }
 serde = { version = "1.0.145", features = ["derive"] }

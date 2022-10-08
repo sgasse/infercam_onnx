@@ -1456,8 +1456,10 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "dirs",
+ "env_logger",
  "futures",
  "image 0.24.4",
+ "log",
  "ndarray",
  "reqwest",
  "serde",

@@ -1,19 +1,22 @@
-use std::net::SocketAddr;
-
 use axum::{
-    extract::{BodyStream, Multipart},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
-use futures::stream::StreamExt;
+use env_logger::TimestampPrecision;
+use infer_server::endpoints::recv_jpgs;
 use infer_server::nn::UltrafaceModel;
 use serde::Deserialize;
+use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() {
     println!("Let's get started!");
+
+    env_logger::builder()
+        .format_timestamp(Some(TimestampPrecision::Millis))
+        .init();
 
     // let model = UltrafaceModel::new(infer_server::nn::UltrafaceVariant::W320H240)
     //     .await
@@ -47,8 +50,12 @@ struct Frame {
     data: Vec<u8>,
 }
 
-async fn recv_jpgs(mut stream: BodyStream) {
-    while let Some(chunk) = stream.next().await {
-        dbg!(chunk);
+#[cfg(test)]
+mod test {
+
+    #[test]
+    fn test_identifying_parts() {
+        let id = b"--blabla\r\n";
+        assert!(id.ends_with("\r\n".as_bytes()));
     }
 }
