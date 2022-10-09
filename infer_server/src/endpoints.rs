@@ -101,7 +101,7 @@ pub async fn recv_named_jpg_streams(
     }
 }
 
-pub async fn recv_jpgs(mut stream: BodyStream) {
+pub async fn recv_jpgs_to_files(mut stream: BodyStream) {
     let mut counter = 0;
 
     let mut buf = Cursor::new(vec![0_u8; 100000]);
