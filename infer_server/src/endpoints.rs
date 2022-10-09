@@ -3,11 +3,11 @@ use axum::{
     body::StreamBody,
     extract::{BodyStream, Query},
     http::header::{self},
-    response::{Html, IntoResponse},
+    response::IntoResponse,
     Extension,
 };
 use bytes::Bytes;
-use futures::{stream::StreamExt, Stream};
+use futures::stream::StreamExt;
 use serde::Deserialize;
 use std::io::Cursor;
 use std::io::Write;
@@ -17,6 +17,10 @@ use std::{fs::File, sync::Arc};
 pub struct RecvJpgsParams {
     #[serde(default)]
     name: Option<String>,
+}
+
+pub async fn healthcheck() -> &'static str {
+    "Healthy"
 }
 
 pub async fn named_stream(
