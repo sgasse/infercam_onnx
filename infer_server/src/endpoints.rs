@@ -63,7 +63,7 @@ pub async fn recv_named_jpg_streams(
     log::info!("Receiving stream for name {}", &name);
     let sender = pubsub.get_sender(&name).await;
 
-    let mut buf = Cursor::new(vec![0_u8; 100000]);
+    let mut buf = Cursor::new(vec![0_u8; 200000]);
     while let Some(Ok(data)) = stream.next().await {
         log::debug!("Data length {}", data.len());
         match data.ends_with("\r\n".as_bytes()) {
