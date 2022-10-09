@@ -1,5 +1,6 @@
 pub mod endpoints;
 pub mod nn;
+pub mod protocol;
 pub mod pubsub;
 pub mod utils;
 
