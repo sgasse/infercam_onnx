@@ -1,3 +1,5 @@
+use std::{net::SocketAddr, sync::Arc};
+
 use axum::{
     routing::{get, post},
     Extension, Router,
@@ -5,11 +7,10 @@ use axum::{
 use env_logger::TimestampPrecision;
 use infer_server::{
     data_socket::spawn_data_socket,
-    endpoints::{healthcheck, named_stream},
+    endpoints::{healthcheck, named_stream, recv_named_jpg_streams},
     nn::UltrafaceModel,
+    pubsub::NamedPubSub,
 };
-use infer_server::{endpoints::recv_named_jpg_streams, pubsub::NamedPubSub};
-use std::{net::SocketAddr, sync::Arc};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

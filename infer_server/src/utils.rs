@@ -1,6 +1,8 @@
-use crate::Error;
-use reqwest::Client;
 use std::{fs::File, io::Cursor};
+
+use reqwest::Client;
+
+use crate::Error;
 
 pub async fn download_file(
     client: &Client,

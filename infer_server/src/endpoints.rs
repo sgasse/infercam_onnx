@@ -1,4 +1,9 @@
-use crate::pubsub::NamedPubSub;
+use std::{
+    fs::File,
+    io::{Cursor, Write},
+    sync::Arc,
+};
+
 use axum::{
     body::StreamBody,
     extract::{BodyStream, Query},
@@ -9,9 +14,8 @@ use axum::{
 use bytes::Bytes;
 use futures::stream::StreamExt;
 use serde::Deserialize;
-use std::io::Cursor;
-use std::io::Write;
-use std::{fs::File, sync::Arc};
+
+use crate::pubsub::NamedPubSub;
 
 #[derive(Debug, Deserialize)]
 pub struct RecvJpgsParams {

@@ -1,12 +1,13 @@
-use crate::protocol::ProtoMsg;
-use crate::pubsub::NamedPubSub;
-use futures::StreamExt;
 use std::sync::Arc;
+
+use futures::StreamExt;
 use tokio::{
     net::{TcpListener, TcpStream},
     task::JoinHandle,
 };
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
+
+use crate::{protocol::ProtoMsg, pubsub::NamedPubSub};
 
 pub async fn spawn_data_socket(pubsub: Arc<NamedPubSub>) -> JoinHandle<Result<(), std::io::Error>> {
     tokio::spawn(async move {
