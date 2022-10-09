@@ -1,5 +1,6 @@
-use infer_server::nn::{InferModel, UltrafaceModel};
 use std::path::Path;
+
+use infer_server::nn::{InferModel, UltrafaceModel};
 
 #[tokio::test]
 async fn test_ultraface_640() -> Result<(), Box<dyn std::error::Error>> {

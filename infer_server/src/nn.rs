@@ -1,8 +1,9 @@
-use crate::{utils::download_file, Error};
 use image::RgbImage;
 use ndarray::s;
 use smallvec::SmallVec;
 use tract_onnx::prelude::*;
+
+use crate::{utils::download_file, Error};
 
 type NnModel = SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>;
 type NnOut = SmallVec<[Arc<Tensor>; 4]>;

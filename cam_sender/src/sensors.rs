@@ -1,12 +1,13 @@
-use crate::Error;
+use std::pin::Pin;
+
 use bytes::Bytes;
 use futures_core::{
     task::{Context, Poll},
     Stream,
 };
-use rscam::Frame;
-use rscam::{Camera, Config};
-use std::pin::Pin;
+use rscam::{Camera, Config, Frame};
+
+use crate::Error;
 
 pub type CaptureFn = Box<dyn Fn() -> Option<Frame> + Send + Sync>;
 
@@ -81,8 +82,9 @@ impl Stream for StreamableCamera {
 #[cfg(test)]
 mod test {
 
-    use crate::Error;
     use rscam::Camera;
+
+    use crate::Error;
 
     #[test]
     fn get_cam_resolution() -> Result<(), Error> {
