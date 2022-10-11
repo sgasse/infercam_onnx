@@ -38,10 +38,7 @@ pub async fn named_stream(
 
     let stream = async_stream::stream! {
         while let Ok(item) = rx.recv().await {
-        // loop {
             log::debug!("Next iteration");
-            // use std::time::Duration;
-            // tokio::time::sleep(Duration::from_secs(1)).await;
             let data: Bytes = Bytes::copy_from_slice(
                 &[
                     "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
