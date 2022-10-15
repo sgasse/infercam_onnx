@@ -15,10 +15,10 @@ use bytes::Bytes;
 use futures::stream::StreamExt;
 use serde::Deserialize;
 
-use crate::pubsub::NamedPubSub;
+use crate::{inferer::Inferer, pubsub::NamedPubSub};
 
 #[derive(Debug, Deserialize)]
-pub struct RecvJpgsParams {
+pub struct StreamParams {
     #[serde(default)]
     name: Option<String>,
 }
@@ -27,9 +27,44 @@ pub async fn healthcheck() -> &'static str {
     "Healthy"
 }
 
+pub async fn face_stream(
+    Extension(pubsub): Extension<Arc<NamedPubSub>>,
+    Extension(inferer): Extension<Arc<Inferer>>,
+    Query(params): Query<StreamParams>,
+) -> impl IntoResponse {
+    let name = params.name.unwrap_or("unknown".into());
+    log::debug!("Face stream for {} requested", &name);
+
+    let img_rx = pubsub.get_receiver(&name).await;
+
+    let mut infered_rx = inferer.subscribe_img_stream(&name, img_rx).await;
+
+    let stream = async_stream::stream! {
+        while let Ok(item) = infered_rx.recv().await {
+            log::debug!("Next iteration in face stream");
+            let data: Bytes = Bytes::copy_from_slice(
+                &[
+                    "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
+                    &item[..],
+                    "\r\n\r\n".as_bytes(),
+                ].concat()
+            );
+            yield Ok::<_, std::io::Error>(data);
+        }
+    };
+
+    let body = StreamBody::new(stream);
+    let headers = [(
+        header::CONTENT_TYPE,
+        "multipart/x-mixed-replace; boundary=frame",
+    )];
+
+    (headers, body)
+}
+
 pub async fn named_stream(
     Extension(pubsub): Extension<Arc<NamedPubSub>>,
-    Query(params): Query<RecvJpgsParams>,
+    Query(params): Query<StreamParams>,
 ) -> impl IntoResponse {
     let name = params.name.unwrap_or("unknown".into());
     log::debug!("Stream for {} requested", &name);
@@ -38,7 +73,7 @@ pub async fn named_stream(
 
     let stream = async_stream::stream! {
         while let Ok(item) = rx.recv().await {
-            log::debug!("Next iteration");
+            log::debug!("Next iteration in video stream");
             let data: Bytes = Bytes::copy_from_slice(
                 &[
                     "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
@@ -61,7 +96,7 @@ pub async fn named_stream(
 
 pub async fn recv_named_jpg_streams(
     Extension(pubsub): Extension<Arc<NamedPubSub>>,
-    Query(params): Query<RecvJpgsParams>,
+    Query(params): Query<StreamParams>,
     mut stream: BodyStream,
 ) {
     let name = params.name.unwrap_or("unknown".into());
