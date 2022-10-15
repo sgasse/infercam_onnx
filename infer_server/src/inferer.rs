@@ -31,6 +31,8 @@ impl Inferer {
     }
 
     pub async fn run(&self) {
+        // TODO: Timeout for receive
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(10));
         loop {
             {
                 let mut channel_map = self.channel_map.lock().await;
@@ -52,6 +54,7 @@ impl Inferer {
                     channel_map.remove(&name);
                 }
             }
+            interval.tick().await;
         }
     }
 }
