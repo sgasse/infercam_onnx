@@ -9,7 +9,6 @@ use infer_server::{
     data_socket::spawn_data_socket,
     endpoints::{face_stream, healthcheck, named_stream, recv_named_jpg_streams},
     inferer::Inferer,
-    nn::UltrafaceModel,
     pubsub::NamedPubSub,
 };
 
@@ -21,12 +20,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .format_timestamp(Some(TimestampPrecision::Millis))
         .init();
 
-    // let model = UltrafaceModel::new(infer_server::nn::UltrafaceVariant::W320H240)
-    //     .await
-    //     .expect("Initialize model");
     let pubsub = Arc::new(NamedPubSub::new());
 
-    let inferer = Arc::new(Inferer::new());
+    let inferer = Arc::new(Inferer::new().await);
 
     let inferer_ = Arc::clone(&inferer);
     let handle_inferer = tokio::spawn(async move {

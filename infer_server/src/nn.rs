@@ -5,9 +5,9 @@ use tract_onnx::prelude::*;
 
 use crate::{utils::download_file, Error};
 
+pub type Bbox = [f32; 4];
 type NnModel = SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>;
 type NnOut = SmallVec<[Arc<Tensor>; 4]>;
-type Bbox = [f32; 4];
 
 /// Positive additive constant to avoid divide-by-zero.
 const EPS: f32 = 1.0e-7;
