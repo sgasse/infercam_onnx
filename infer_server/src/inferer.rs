@@ -138,13 +138,13 @@ impl InferBroker {
                     for (name, (img_rx, infered_tx)) in channel_map.iter_mut() {
                         // TODO: Parallel await?
                         let recv_with_timeout =
-                            tokio::time::timeout(std::time::Duration::from_millis(200), async {
+                            tokio::time::timeout(std::time::Duration::from_millis(1000), async {
                                 img_rx.recv().await
                             });
                         match recv_with_timeout.await {
                             Ok(Some(img)) => {
                                 match self.infer_queue_tx.send((img, infered_tx.clone())).await {
-                                    Ok(()) => log::debug!("Send frame of {} to inferer", &name),
+                                    Ok(()) => log::warn!("Send frame of {} to inferer", &name),
                                     Err(err) => log::debug!(
                                         "Could not end fame of {} inferer: {}",
                                         &name,
