@@ -16,7 +16,7 @@ impl NamedPubSub {
         }
     }
 
-    pub async fn get_sender(&self, name: &str) -> broadcast::Sender<Vec<u8>> {
+    pub async fn get_broadcast_sender(&self, name: &str) -> broadcast::Sender<Vec<u8>> {
         let mut map = self.map.lock().await;
         match map.get(name) {
             Some(tx) => tx.clone(),
@@ -28,7 +28,7 @@ impl NamedPubSub {
         }
     }
 
-    pub async fn get_receiver(&self, name: &str) -> broadcast::Receiver<Vec<u8>> {
+    pub async fn get_broadcast_receiver(&self, name: &str) -> broadcast::Receiver<Vec<u8>> {
         let mut map = self.map.lock().await;
         match map.get(name) {
             Some(tx) => tx.subscribe(),

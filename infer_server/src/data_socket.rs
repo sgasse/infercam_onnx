@@ -3,6 +3,7 @@ use std::sync::Arc;
 use futures::StreamExt;
 use tokio::{
     net::{TcpListener, TcpStream},
+    sync::broadcast::Sender,
     task::JoinHandle,
 };
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
@@ -22,8 +23,6 @@ pub async fn spawn_data_socket(pubsub: Arc<NamedPubSub>) -> JoinHandle<Result<()
                 Ok::<_, std::io::Error>(())
             });
         }
-
-        Ok::<_, std::io::Error>(())
     })
 }
 
@@ -32,14 +31,40 @@ async fn handle_incoming(stream: TcpStream, pubsub: Arc<NamedPubSub>) -> std::io
 
     let mut transport = Framed::new(stream, LengthDelimitedCodec::new());
 
+    let mut sender_raw: Option<Sender<Vec<u8>>> = None;
+    let mut sender_infer: Option<Sender<Vec<u8>>> = None;
+
     while let Some(Ok(frame)) = transport.next().await {
         let data = frame;
         let proto_msg: ProtoMsg = bincode::deserialize(&data[..]).unwrap();
         if let ProtoMsg::FrameMsg(frame_msg) = proto_msg {
-            let sender = pubsub.get_sender(&frame_msg.id).await;
-            if let Err(_) = sender.send(frame_msg.data) {
-                log::debug!("Send error for id {} - probably no listener", &frame_msg.id);
+            if sender_raw.is_none() {
+                sender_raw = Some(pubsub.get_broadcast_sender(&frame_msg.id).await);
             }
+            if sender_infer.is_none() {
+                sender_infer = Some(
+                    pubsub
+                        .get_broadcast_sender(&format!("infer_{}", &frame_msg.id))
+                        .await,
+                );
+            }
+
+            sender_raw.as_mut().and_then(|sender| {
+                if let Err(_) = sender.send(frame_msg.data.clone()) {
+                    log::debug!("Send error for id {} - probably no listener", &frame_msg.id);
+                }
+                Some(sender)
+            });
+
+            sender_infer.as_mut().and_then(|sender| {
+                if let Err(_) = sender.send(frame_msg.data) {
+                    log::debug!(
+                        "Send error infer for id {} - probably no listener",
+                        &frame_msg.id
+                    );
+                }
+                Some(sender)
+            });
         }
     }
 
