@@ -8,7 +8,7 @@ use env_logger::TimestampPrecision;
 use infer_server::{
     data_socket::spawn_data_socket,
     endpoints::{face_stream, healthcheck, named_stream, recv_named_jpg_streams},
-    inferer::Inferer,
+    inferer::InferBroker,
     pubsub::NamedPubSub,
 };
 
@@ -22,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let pubsub = Arc::new(NamedPubSub::new());
 
-    let inferer = Arc::new(Inferer::new().await);
+    let inferer = Arc::new(InferBroker::new().await);
 
     let inferer_ = Arc::clone(&inferer);
     let handle_inferer = tokio::spawn(async move {

@@ -15,7 +15,7 @@ use bytes::Bytes;
 use futures::stream::StreamExt;
 use serde::Deserialize;
 
-use crate::{inferer::Inferer, pubsub::NamedPubSub};
+use crate::{inferer::InferBroker, pubsub::NamedPubSub};
 
 #[derive(Debug, Deserialize)]
 pub struct StreamParams {
@@ -29,41 +29,39 @@ pub async fn healthcheck() -> &'static str {
 
 pub async fn face_stream(
     Extension(pubsub): Extension<Arc<NamedPubSub>>,
-    Extension(inferer): Extension<Arc<Inferer>>,
+    Extension(inferer): Extension<Arc<InferBroker>>,
     Query(params): Query<StreamParams>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, String> {
     let name = params.name.unwrap_or("unknown".into());
-    log::debug!("Face stream for {} requested", &name);
+    log::info!("Face stream for {} requested", &name);
 
-    let img_rx = pubsub
-        .get_broadcast_receiver(&format!("infer_{}", &name))
-        .await;
+    if let Ok(mut infered_rx) = inferer.subscribe_img_stream(&name, &pubsub).await {
+        let stream = async_stream::stream! {
+            while let Ok(item) = infered_rx.recv().await {
+                log::debug!("Next iteration in face stream");
+                let data: Bytes = Bytes::copy_from_slice(
+                    &[
+                        "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
+                        &item[..],
+                        "\r\n\r\n".as_bytes(),
+                    ].concat()
+                );
+                yield Ok::<_, std::io::Error>(data);
+            }
 
-    let mut infered_rx = inferer.subscribe_img_stream(&name, img_rx).await;
+            log::error!("Exited stream!");
+        };
 
-    let stream = async_stream::stream! {
-        while let Ok(item) = infered_rx.recv().await {
-            log::debug!("Next iteration in face stream");
-            let data: Bytes = Bytes::copy_from_slice(
-                &[
-                    "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
-                    &item[..],
-                    "\r\n\r\n".as_bytes(),
-                ].concat()
-            );
-            yield Ok::<_, std::io::Error>(data);
-        }
+        let body = StreamBody::new(stream);
+        let headers = [(
+            header::CONTENT_TYPE,
+            "multipart/x-mixed-replace; boundary=frame",
+        )];
 
-        log::error!("Exited stream!");
-    };
+        return Ok((headers, body));
+    }
 
-    let body = StreamBody::new(stream);
-    let headers = [(
-        header::CONTENT_TYPE,
-        "multipart/x-mixed-replace; boundary=frame",
-    )];
-
-    (headers, body)
+    return Err("oh no!".to_owned());
 }
 
 pub async fn named_stream(
@@ -71,7 +69,7 @@ pub async fn named_stream(
     Query(params): Query<StreamParams>,
 ) -> impl IntoResponse {
     let name = params.name.unwrap_or("unknown".into());
-    log::debug!("Stream for {} requested", &name);
+    log::info!("Stream for {} requested", &name);
 
     let mut rx = pubsub.get_broadcast_receiver(&name).await;
 

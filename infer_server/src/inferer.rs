@@ -1,6 +1,6 @@
 use crate::{
     nn::{Bbox, InferModel, UltrafaceModel},
-    pubsub::{BytesReceiver, BytesSender},
+    pubsub::{BytesReceiver, BytesSender, MpscBytesReceiver, NamedPubSub},
     Error,
 };
 use image::ImageDecoder;
@@ -13,35 +13,47 @@ use imageproc::rect::Rect;
 use lazy_static::lazy_static;
 use simple_error::SimpleError;
 use std::{collections::HashMap, io::Cursor};
-use tokio::sync::{broadcast, Mutex};
+use tokio::{
+    sync::{broadcast, mpsc, Mutex},
+    task::JoinHandle,
+};
 
-pub type RecvSendPair = (BytesReceiver, BytesSender);
+pub type RecvSendPair = (MpscBytesReceiver, BytesSender);
+
+pub struct InferBroker {
+    channel_map: Mutex<HashMap<String, RecvSendPair>>,
+    infer_queue_tx: mpsc::Sender<(Vec<u8>, BytesSender)>,
+    infer_task: JoinHandle<()>,
+}
 
 pub struct Inferer {
-    channel_map: Mutex<HashMap<String, RecvSendPair>>,
     model: UltrafaceModel,
+    infer_queue_rx: mpsc::Receiver<(Vec<u8>, BytesSender)>,
 }
 
 impl Inferer {
-    pub async fn new() -> Self {
-        let model = UltrafaceModel::new(crate::nn::UltrafaceVariant::W320H240)
-            .await
-            .expect("Initialize model");
+    pub fn new(
+        model: UltrafaceModel,
+        infer_queue_rx: mpsc::Receiver<(Vec<u8>, BytesSender)>,
+    ) -> Self {
         Self {
-            channel_map: Mutex::new(HashMap::new()),
             model,
+            infer_queue_rx,
         }
     }
 
-    pub async fn subscribe_img_stream(&self, name: &str, img_rx: BytesReceiver) -> BytesReceiver {
-        let mut channel_map = self.channel_map.lock().await;
-
-        match channel_map.get(name) {
-            Some((_, infered_tx)) => infered_tx.subscribe(),
-            None => {
-                let (infered_tx, infered_rx) = broadcast::channel(10);
-                channel_map.insert(name.to_owned(), (img_rx, infered_tx));
-                infered_rx
+    pub async fn run(&mut self) {
+        loop {
+            if let Some((frame, infered_tx)) = self.infer_queue_rx.recv().await {
+                let (width, height) = (1280, 720);
+                match self.process_frame(frame, width, height) {
+                    Err(err) => log::error!("Error in process frame: {}", err),
+                    Ok(infered) => {
+                        if let Err(err) = infered_tx.send(infered) {
+                            log::error!("infered_tx.send error: {}", err);
+                        }
+                    }
+                }
             }
         }
     }
@@ -67,37 +79,81 @@ impl Inferer {
     fn infer_faces(&self, frame: RgbImage) -> Result<Vec<(Bbox, f32)>, Error> {
         self.model.run(frame)
     }
+}
+
+impl InferBroker {
+    pub async fn new() -> Self {
+        let model = UltrafaceModel::new(crate::nn::UltrafaceVariant::W320H240)
+            .await
+            .expect("Initialize model");
+        let (infer_queue_tx, infer_queue_rx) = mpsc::channel(10);
+        let infer_task = tokio::spawn(async move {
+            let mut inferer = Inferer::new(model, infer_queue_rx);
+            loop {
+                inferer.run().await;
+            }
+
+            ()
+        });
+        Self {
+            channel_map: Mutex::new(HashMap::new()),
+            infer_queue_tx,
+            infer_task,
+        }
+    }
+
+    pub async fn subscribe_img_stream(
+        &self,
+        name: &str,
+        pubsub: &NamedPubSub,
+    ) -> Result<BytesReceiver, Error> {
+        let mut channel_map = self.channel_map.lock().await;
+
+        match channel_map.get(name) {
+            Some((_, infered_tx)) => Ok(infered_tx.subscribe()),
+            None => {
+                // We need to retrieve the receiver for this channel
+                match pubsub.get_mpsc_receiver(name).await {
+                    Some(img_rx) => {
+                        let (infered_tx, infered_rx) = broadcast::channel(10);
+                        channel_map.insert(name.to_owned(), (img_rx, infered_tx));
+                        Ok(infered_rx)
+                    }
+                    None => Err(
+                        SimpleError::new("Could not get mpsc recv end, cannot subscribe").into(),
+                    ),
+                }
+            }
+        }
+    }
 
     pub async fn run(&self) {
-        // TODO: Consider oneshot channel instead of Mutex?
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(10));
         loop {
             {
                 let mut channel_map = self.channel_map.lock().await;
-                let mut names_to_remove = Vec::with_capacity(0);
+                // TODO: What to do about names to remove?
+                // let mut names_to_remove = Vec::with_capacity(0);
                 {
                     for (name, (img_rx, infered_tx)) in channel_map.iter_mut() {
                         // TODO: Parallel await?
                         let recv_with_timeout =
-                            tokio::time::timeout(std::time::Duration::from_millis(1000), async {
+                            tokio::time::timeout(std::time::Duration::from_millis(200), async {
                                 img_rx.recv().await
                             });
                         match recv_with_timeout.await {
-                            Ok(Ok(img)) => {
-                                let (width, height) = (1280, 720);
-                                match self.process_frame(img, width, height) {
-                                    Err(err) => log::error!("Error in process frame: {}", err),
-                                    Ok(infered) => {
-                                        if let Err(err) = infered_tx.send(infered) {
-                                            log::error!("infered_tx.send error: {}", err);
-                                            log::info!("No listener for {}", name);
-                                            names_to_remove.push(name.clone());
-                                        }
-                                    }
+                            Ok(Some(img)) => {
+                                match self.infer_queue_tx.send((img, infered_tx.clone())).await {
+                                    Ok(()) => log::debug!("Send frame of {} to inferer", &name),
+                                    Err(err) => log::debug!(
+                                        "Could not end fame of {} inferer: {}",
+                                        &name,
+                                        &err,
+                                    ),
                                 }
                             }
-                            Ok(Err(err)) => {
-                                log::error!("Receive error for {}: {}", &name, err);
+                            Ok(None) => {
+                                log::error!("data socket closed for {}", &name);
                             }
                             Err(elapsed) => {
                                 use std::error::Error;
@@ -105,16 +161,15 @@ impl Inferer {
                                     None => log::info!("Receive timed out for {}", &name),
                                     Some(err) => log::info!("Receive error for {}: {}", &name, err),
                                 }
-                                log::info!("Infer timed out or failed");
                             }
                         }
                     }
                 }
 
-                for name in names_to_remove {
-                    log::info!("Removing channel {}", &name);
-                    channel_map.remove(&name);
-                }
+                // for name in names_to_remove {
+                //     log::info!("Removing channel {}", &name);
+                //     channel_map.remove(&name);
+                // }
             }
             interval.tick().await;
         }
