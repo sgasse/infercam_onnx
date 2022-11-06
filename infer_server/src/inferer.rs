@@ -88,7 +88,8 @@ impl Inferer {
                                 match self.process_frame(img, width, height) {
                                     Err(err) => log::error!("Error in process frame: {}", err),
                                     Ok(infered) => {
-                                        if let Err(_) = infered_tx.send(infered) {
+                                        if let Err(err) = infered_tx.send(infered) {
+                                            log::error!("infered_tx.send error: {}", err);
                                             log::info!("No listener for {}", name);
                                             names_to_remove.push(name.clone());
                                         }

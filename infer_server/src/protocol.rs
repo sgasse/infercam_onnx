@@ -23,7 +23,7 @@ mod test {
     use super::FrameMsg;
 
     #[test]
-    fn test_bson_serde() {
+    fn test_bincode_serde() {
         let frame_msg = FrameMsg {
             id: "bla".into(),
             data: vec![1, 2, 3],

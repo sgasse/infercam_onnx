@@ -35,7 +35,9 @@ pub async fn face_stream(
     let name = params.name.unwrap_or("unknown".into());
     log::debug!("Face stream for {} requested", &name);
 
-    let img_rx = pubsub.get_receiver(&name).await;
+    let img_rx = pubsub
+        .get_broadcast_receiver(&format!("infer_{}", &name))
+        .await;
 
     let mut infered_rx = inferer.subscribe_img_stream(&name, img_rx).await;
 
@@ -51,6 +53,8 @@ pub async fn face_stream(
             );
             yield Ok::<_, std::io::Error>(data);
         }
+
+        log::error!("Exited stream!");
     };
 
     let body = StreamBody::new(stream);
@@ -69,7 +73,7 @@ pub async fn named_stream(
     let name = params.name.unwrap_or("unknown".into());
     log::debug!("Stream for {} requested", &name);
 
-    let mut rx = pubsub.get_receiver(&name).await;
+    let mut rx = pubsub.get_broadcast_receiver(&name).await;
 
     let stream = async_stream::stream! {
         while let Ok(item) = rx.recv().await {
@@ -101,7 +105,7 @@ pub async fn recv_named_jpg_streams(
 ) {
     let name = params.name.unwrap_or("unknown".into());
     log::info!("Receiving stream for name {}", &name);
-    let sender = pubsub.get_sender(&name).await;
+    let sender = pubsub.get_broadcast_sender(&name).await;
 
     let mut buf = Cursor::new(vec![0_u8; 200000]);
     while let Some(Ok(data)) = stream.next().await {
