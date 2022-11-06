@@ -7,7 +7,7 @@ use std::{
 use axum::{
     body::StreamBody,
     extract::{BodyStream, Query},
-    http::header::{self},
+    http::header,
     response::IntoResponse,
     Extension,
 };
@@ -38,7 +38,7 @@ pub async fn face_stream(
     if let Ok(mut infered_rx) = inferer.subscribe_img_stream(&name, &pubsub).await {
         let stream = async_stream::stream! {
             while let Ok(item) = infered_rx.recv().await {
-                log::debug!("Next iteration in face stream");
+                // log::debug!("Next iteration in face stream");
                 let data: Bytes = Bytes::copy_from_slice(
                     &[
                         "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
@@ -49,7 +49,7 @@ pub async fn face_stream(
                 yield Ok::<_, std::io::Error>(data);
             }
 
-            log::error!("Exited stream!");
+            log::info!("Exited stream for {}", &name);
         };
 
         let body = StreamBody::new(stream);
@@ -61,7 +61,7 @@ pub async fn face_stream(
         return Ok((headers, body));
     }
 
-    return Err("oh no!".to_owned());
+    return Err(format!("Could not setup face stream for {}", name));
 }
 
 pub async fn named_stream(
@@ -75,7 +75,7 @@ pub async fn named_stream(
 
     let stream = async_stream::stream! {
         while let Ok(item) = rx.recv().await {
-            log::debug!("Next iteration in video stream");
+            // log::debug!("Next iteration in video stream");
             let data: Bytes = Bytes::copy_from_slice(
                 &[
                     "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
@@ -85,6 +85,7 @@ pub async fn named_stream(
             );
             yield Ok::<_, std::io::Error>(data);
         }
+        log::info!("Exited stream for {}", &name);
     };
 
     let body = StreamBody::new(stream);

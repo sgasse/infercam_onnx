@@ -86,7 +86,7 @@ impl InferBroker {
         let model = UltrafaceModel::new(crate::nn::UltrafaceVariant::W320H240)
             .await
             .expect("Initialize model");
-        let (infer_queue_tx, infer_queue_rx) = mpsc::channel(10);
+        let (infer_queue_tx, infer_queue_rx) = mpsc::channel(1);
         let infer_task = tokio::spawn(async move {
             let mut inferer = Inferer::new(model, infer_queue_rx);
             loop {
@@ -138,13 +138,13 @@ impl InferBroker {
                     for (name, (img_rx, infered_tx)) in channel_map.iter_mut() {
                         // TODO: Parallel await?
                         let recv_with_timeout =
-                            tokio::time::timeout(std::time::Duration::from_millis(1000), async {
+                            tokio::time::timeout(std::time::Duration::from_millis(200), async {
                                 img_rx.recv().await
                             });
                         match recv_with_timeout.await {
                             Ok(Some(img)) => {
                                 match self.infer_queue_tx.send((img, infered_tx.clone())).await {
-                                    Ok(()) => log::warn!("Send frame of {} to inferer", &name),
+                                    Ok(()) => log::debug!("Send frame of {} to inferer", &name),
                                     Err(err) => log::debug!(
                                         "Could not end fame of {} inferer: {}",
                                         &name,
@@ -153,13 +153,13 @@ impl InferBroker {
                                 }
                             }
                             Ok(None) => {
-                                log::error!("data socket closed for {}", &name);
+                                log::warn!("data socket closed for {}", &name);
                             }
                             Err(elapsed) => {
                                 use std::error::Error;
                                 match elapsed.source() {
                                     None => log::info!("Receive timed out for {}", &name),
-                                    Some(err) => log::info!("Receive error for {}: {}", &name, err),
+                                    Some(err) => log::warn!("Receive error for {}: {}", &name, err),
                                 }
                             }
                         }
