@@ -8,7 +8,8 @@ use tokio::{
 };
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-use crate::{protocol::ProtoMsg, pubsub::NamedPubSub};
+use crate::pubsub::{BytesSender, MpscBytesSender, NamedPubSub};
+use common::protocol::ProtoMsg;
 
 pub async fn spawn_data_socket(pubsub: Arc<NamedPubSub>) -> JoinHandle<Result<(), std::io::Error>> {
     tokio::spawn(async move {
@@ -27,46 +28,49 @@ pub async fn spawn_data_socket(pubsub: Arc<NamedPubSub>) -> JoinHandle<Result<()
 }
 
 async fn handle_incoming(stream: TcpStream, pubsub: Arc<NamedPubSub>) -> std::io::Result<()> {
-    println!("{}: New connection", stream.peer_addr()?);
+    let addr = stream.peer_addr()?;
+    log::info!("{}: New connection", &addr);
 
     let mut transport = Framed::new(stream, LengthDelimitedCodec::new());
 
-    let mut sender_raw: Option<Sender<Vec<u8>>> = None;
-    let mut sender_infer: Option<Sender<Vec<u8>>> = None;
-
-    while let Some(Ok(frame)) = transport.next().await {
-        let data = frame;
-        let proto_msg: ProtoMsg = bincode::deserialize(&data[..]).unwrap();
-        if let ProtoMsg::FrameMsg(frame_msg) = proto_msg {
-            if sender_raw.is_none() {
-                sender_raw = Some(pubsub.get_broadcast_sender(&frame_msg.id).await);
+    let name = match transport.next().await {
+        Some(Ok(data)) => {
+            let proto_msg = ProtoMsg::deserialize(&data).unwrap();
+            match proto_msg {
+                ProtoMsg::ConnectReq(name) => Some(name),
+                _ => None,
             }
-            if sender_infer.is_none() {
-                sender_infer = Some(
-                    pubsub
-                        .get_broadcast_sender(&format!("infer_{}", &frame_msg.id))
-                        .await,
-                );
-            }
+        }
+        _ => None,
+    };
 
-            sender_raw.as_mut().and_then(|sender| {
-                if let Err(_) = sender.send(frame_msg.data.clone()) {
+    if let Some(name) = name {
+        let sender_raw = pubsub.get_broadcast_sender(&name).await;
+        let sender_infer = pubsub.get_mpsc_sender(&format!("infer_{}", &name)).await;
+
+        while let Some(Ok(frame)) = transport.next().await {
+            let data = frame;
+            let proto_msg: ProtoMsg = ProtoMsg::deserialize(&data[..]).unwrap();
+            if let ProtoMsg::FrameMsg(frame_msg) = proto_msg {
+                if let Err(_) = sender_raw.send(frame_msg.data.clone()) {
                     log::debug!("Send error for id {} - probably no listener", &frame_msg.id);
                 }
-                Some(sender)
-            });
 
-            sender_infer.as_mut().and_then(|sender| {
-                if let Err(_) = sender.send(frame_msg.data) {
+                let send_infer_with_timeout =
+                    tokio::time::timeout(std::time::Duration::from_millis(10), async {
+                        sender_infer.send(frame_msg.data).await
+                    });
+                if let Err(_) = send_infer_with_timeout.await {
                     log::debug!(
                         "Send error infer for id {} - probably no listener",
                         &frame_msg.id
                     );
                 }
-                Some(sender)
-            });
+            }
         }
     }
+
+    log::info!("{}: Connection closed", &addr);
 
     Ok(())
 }

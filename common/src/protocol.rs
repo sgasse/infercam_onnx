@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum ProtoMsg {
+    ConnectReq(String),
     FrameMsg(FrameMsg),
 }
 
@@ -14,6 +15,12 @@ pub struct FrameMsg {
 impl FrameMsg {
     pub fn new(id: String, data: Vec<u8>) -> Self {
         Self { id, data }
+    }
+}
+
+impl ProtoMsg {
+    pub fn deserialize<'a>(bytes: &'a [u8]) -> Result<Self, Box<bincode::ErrorKind>> {
+        bincode::deserialize(bytes)
     }
 }
 
