@@ -46,7 +46,7 @@ async fn handle_incoming(stream: TcpStream, pubsub: Arc<NamedPubSub>) -> std::io
 
     if let Some(name) = name {
         let sender_raw = pubsub.get_broadcast_sender(&name).await;
-        let sender_infer = pubsub.get_mpsc_sender(&format!("infer_{}", &name)).await;
+        let sender_infer = pubsub.get_mpsc_sender(&name).await;
 
         while let Some(Ok(frame)) = transport.next().await {
             let data = frame;
@@ -65,6 +65,8 @@ async fn handle_incoming(stream: TcpStream, pubsub: Arc<NamedPubSub>) -> std::io
                         "Send error infer for id {} - probably no listener",
                         &frame_msg.id
                     );
+                } else {
+                    log::warn!("Successfully sent to infer!");
                 }
             }
         }
