@@ -53,7 +53,7 @@ async fn handle_incoming(stream: TcpStream, pubsub: Arc<NamedPubSub>) -> std::io
             let proto_msg: ProtoMsg = ProtoMsg::deserialize(&data[..]).unwrap();
             if let ProtoMsg::FrameMsg(frame_msg) = proto_msg {
                 if let Err(_) = sender_raw.send(frame_msg.data.clone()) {
-                    log::debug!("Send error for id {} - probably no listener", &frame_msg.id);
+                    // log::debug!("Send error for id {} - probably no listener", &frame_msg.id);
                 }
 
                 let send_infer_with_timeout =
@@ -61,12 +61,12 @@ async fn handle_incoming(stream: TcpStream, pubsub: Arc<NamedPubSub>) -> std::io
                         sender_infer.send(frame_msg.data).await
                     });
                 if let Err(_) = send_infer_with_timeout.await {
-                    log::debug!(
-                        "Send error infer for id {} - probably no listener",
-                        &frame_msg.id
-                    );
+                    // log::debug!(
+                    //     "Send error infer for id {} - probably no listener",
+                    //     &frame_msg.id
+                    // );
                 } else {
-                    log::warn!("Successfully sent to infer!");
+                    log::debug!("Successfully sent to infer!");
                 }
             }
         }

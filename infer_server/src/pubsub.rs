@@ -49,7 +49,7 @@ impl NamedPubSub {
         match map.get(name) {
             Some((tx, _)) => return tx.clone(),
             None => {
-                let (tx, rx) = mpsc::channel(3);
+                let (tx, rx) = mpsc::channel(1);
                 map.insert(name.to_owned(), (tx.clone(), Some(rx)));
                 tx
             }
@@ -60,7 +60,7 @@ impl NamedPubSub {
         match map.get_mut(name) {
             Some((_, rx_opt)) => rx_opt.take(),
             None => {
-                let (tx, rx) = mpsc::channel(3);
+                let (tx, rx) = mpsc::channel(1);
                 map.insert(name.to_owned(), (tx, None));
                 Some(rx)
             }
