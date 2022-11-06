@@ -1,8 +1,8 @@
 use cam_sender::{sensors::get_capture_fn, Error};
 use clap::Parser;
+use common::protocol::{FrameMsg, ProtoMsg};
 use env_logger::TimestampPrecision;
 use futures::sink::SinkExt;
-use infer_server::protocol::{FrameMsg, ProtoMsg};
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
@@ -35,13 +35,17 @@ async fn main() -> Result<(), Error> {
             log::info!("Client connected to {}", &args.channel);
 
             let mut transport = Framed::new(stream, LengthDelimitedCodec::new());
+            let init_msg = bytes::Bytes::from(bincode::serialize(&ProtoMsg::ConnectReq(
+                args.channel.clone(),
+            ))?);
+            transport.send(init_msg).await?;
             loop {
                 let frame = capture_fn().unwrap();
                 let data =
                     ProtoMsg::FrameMsg(FrameMsg::new(args.channel.clone(), frame[..].to_vec()));
-                let data: Vec<u8> = bincode::serialize(&data).unwrap();
+                let data: Vec<u8> = bincode::serialize(&data)?;
                 let data = bytes::Bytes::from(data);
-                transport.send(data).await.unwrap();
+                transport.send(data).await?;
             }
         }
         Err(err) => {

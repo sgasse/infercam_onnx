@@ -11,8 +11,8 @@ path = "src/lib.rs"
 [dependencies]
 async-stream = "0.3.3"
 axum = { version = "0.5.16", features = ["multipart", "query"] }
-bincode = "1.3.3"
 bytes = "1.2.1"
+common = { path = "../common" }
 dirs = "4.0.0"
 env_logger = "0.9.1"
 futures = "0.3.24"
