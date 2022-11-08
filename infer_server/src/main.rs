@@ -22,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let pubsub = Arc::new(NamedPubSub::new());
 
-    let inferer = Arc::new(InferBroker::new().await);
+    let inferer = Arc::new(InferBroker::new(Arc::clone(&pubsub)).await);
 
     let inferer_ = Arc::clone(&inferer);
     let handle_inferer = tokio::spawn(async move {

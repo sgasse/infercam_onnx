@@ -13,6 +13,7 @@ use imageproc::rect::Rect;
 use lazy_static::lazy_static;
 use simple_error::SimpleError;
 use std::{collections::HashMap, io::Cursor};
+use std::{sync::Arc, time::Duration};
 use tokio::{
     sync::{broadcast, mpsc, Mutex},
     task::JoinHandle,
@@ -22,73 +23,21 @@ pub type RecvSendPair = (MpscBytesReceiver, BytesSender);
 
 pub struct InferBroker {
     channel_map: Mutex<HashMap<String, RecvSendPair>>,
-    infer_queue_tx: mpsc::Sender<(Vec<u8>, BytesSender)>,
+    infer_queue_tx: mpsc::Sender<(Vec<u8>, BytesSender, String)>,
+    unsendable_rx: Mutex<mpsc::Receiver<String>>,
     infer_task: JoinHandle<()>,
-}
-
-pub struct Inferer {
-    model: UltrafaceModel,
-    infer_queue_rx: mpsc::Receiver<(Vec<u8>, BytesSender)>,
-}
-
-impl Inferer {
-    pub fn new(
-        model: UltrafaceModel,
-        infer_queue_rx: mpsc::Receiver<(Vec<u8>, BytesSender)>,
-    ) -> Self {
-        Self {
-            model,
-            infer_queue_rx,
-        }
-    }
-
-    pub async fn run(&mut self) {
-        loop {
-            if let Some((frame, infered_tx)) = self.infer_queue_rx.recv().await {
-                let (width, height) = (1280, 720);
-                match self.process_frame(frame, width, height) {
-                    Err(err) => log::error!("Error in process frame: {}", err),
-                    Ok(infered) => {
-                        if let Err(err) = infered_tx.send(infered) {
-                            log::error!("infered_tx.send error: {}", err);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn process_frame(&self, frame: Vec<u8>, width: u32, height: u32) -> Result<Vec<u8>, Error> {
-        let frame = decode_frame(width, height, frame)?;
-        let bboxes_with_confidences = self.infer_faces(frame.clone())?;
-
-        let frame = draw_bboxes_on_image(frame, bboxes_with_confidences, width, height);
-
-        let mut buf = Cursor::new(Vec::new());
-
-        JpegEncoder::new_with_quality(&mut buf, 70).encode(
-            &frame,
-            width,
-            height,
-            ColorType::Rgb8,
-        )?;
-
-        Ok(buf.into_inner())
-    }
-
-    fn infer_faces(&self, frame: RgbImage) -> Result<Vec<(Bbox, f32)>, Error> {
-        self.model.run(frame)
-    }
+    pubsub: Arc<NamedPubSub>,
 }
 
 impl InferBroker {
-    pub async fn new() -> Self {
+    pub async fn new(pubsub: Arc<NamedPubSub>) -> Self {
         let model = UltrafaceModel::new(crate::nn::UltrafaceVariant::W320H240)
             .await
             .expect("Initialize model");
         let (infer_queue_tx, infer_queue_rx) = mpsc::channel(1);
+        let (unsendable_tx, unsendable_rx) = mpsc::channel(20);
         let infer_task = tokio::spawn(async move {
-            let mut inferer = Inferer::new(model, infer_queue_rx);
+            let mut inferer = Inferer::new(model, infer_queue_rx, unsendable_tx);
             loop {
                 inferer.run().await;
             }
@@ -99,6 +48,8 @@ impl InferBroker {
             channel_map: Mutex::new(HashMap::new()),
             infer_queue_tx,
             infer_task,
+            unsendable_rx: Mutex::new(unsendable_rx),
+            pubsub,
         }
     }
 
@@ -128,22 +79,24 @@ impl InferBroker {
     }
 
     pub async fn run(&self) {
-        let mut interval = tokio::time::interval(std::time::Duration::from_millis(10));
+        let mut interval = tokio::time::interval(Duration::from_millis(1000));
         loop {
             {
                 let mut channel_map = self.channel_map.lock().await;
-                // TODO: What to do about names to remove?
-                // let mut names_to_remove = Vec::with_capacity(0);
                 {
                     for (name, (img_rx, infered_tx)) in channel_map.iter_mut() {
                         // TODO: Parallel await?
                         let recv_with_timeout =
-                            tokio::time::timeout(std::time::Duration::from_millis(200), async {
+                            tokio::time::timeout(Duration::from_millis(200), async {
                                 img_rx.recv().await
                             });
                         match recv_with_timeout.await {
                             Ok(Some(img)) => {
-                                match self.infer_queue_tx.send((img, infered_tx.clone())).await {
+                                match self
+                                    .infer_queue_tx
+                                    .send((img, infered_tx.clone(), name.clone()))
+                                    .await
+                                {
                                     Ok(()) => log::debug!("Send frame of {} to inferer", &name),
                                     Err(err) => log::debug!(
                                         "Could not end fame of {} inferer: {}",
@@ -166,13 +119,95 @@ impl InferBroker {
                     }
                 }
 
-                // for name in names_to_remove {
-                //     log::info!("Removing channel {}", &name);
-                //     channel_map.remove(&name);
-                // }
+                let mut unsendable_rx = self.unsendable_rx.lock().await;
+                while let Ok(name_to_remove) = unsendable_rx.try_recv() {
+                    log::info!("Returning channel {} to pubsub", &name_to_remove);
+                    if let Some((img_rx, _)) = channel_map.remove(&name_to_remove) {
+                        self.pubsub
+                            .return_mpsc_receiver(&name_to_remove, img_rx)
+                            .await;
+                    }
+                }
             }
             interval.tick().await;
         }
+    }
+}
+
+pub struct Inferer {
+    model: UltrafaceModel,
+    infer_queue_rx: mpsc::Receiver<(Vec<u8>, BytesSender, String)>,
+    unsendable_tx: mpsc::Sender<String>,
+}
+
+impl Inferer {
+    pub fn new(
+        model: UltrafaceModel,
+        infer_queue_rx: mpsc::Receiver<(Vec<u8>, BytesSender, String)>,
+        unsendable_tx: mpsc::Sender<String>,
+    ) -> Self {
+        Self {
+            model,
+            infer_queue_rx,
+            unsendable_tx,
+        }
+    }
+
+    pub async fn run(&mut self) {
+        loop {
+            if let Some((frame, infered_tx, name)) = self.infer_queue_rx.recv().await {
+                let (width, height) = (1280, 720);
+                // This is a case of the compiler being too strict. If we move the
+                // `unsendable_tx.send(...).await` into the error case, it complains
+                // about the `err` variable of type `dyn StdError` not being Send.
+                // We scope the evaluation so that the variable is freed before we
+                // await on sending.
+                let remove_name = {
+                    match self.process_frame(frame, width, height) {
+                        Err(err) => {
+                            log::error!("Error in process frame: {}", err);
+                            false
+                        }
+                        Ok(infered) => {
+                            if let Err(err) = infered_tx.send(infered) {
+                                log::info!("Could not send infered image of {}: {}", &name, err);
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                    }
+                };
+
+                if remove_name {
+                    if let Err(_) = self.unsendable_tx.send(name).await {
+                        log::error!("Could not send name to remove");
+                    }
+                }
+            }
+        }
+    }
+
+    fn process_frame(&self, frame: Vec<u8>, width: u32, height: u32) -> Result<Vec<u8>, Error> {
+        let frame = decode_frame(width, height, frame)?;
+        let bboxes_with_confidences = self.infer_faces(frame.clone())?;
+
+        let frame = draw_bboxes_on_image(frame, bboxes_with_confidences, width, height);
+
+        let mut buf = Cursor::new(Vec::new());
+
+        JpegEncoder::new_with_quality(&mut buf, 70).encode(
+            &frame,
+            width,
+            height,
+            ColorType::Rgb8,
+        )?;
+
+        Ok(buf.into_inner())
+    }
+
+    fn infer_faces(&self, frame: RgbImage) -> Result<Vec<(Bbox, f32)>, Error> {
+        self.model.run(frame)
     }
 }
 

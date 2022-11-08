@@ -66,7 +66,7 @@ async fn handle_incoming(stream: TcpStream, pubsub: Arc<NamedPubSub>) -> std::io
                     //     &frame_msg.id
                     // );
                 } else {
-                    log::debug!("Successfully sent to infer!");
+                    log::debug!("Data socket of {} sent to infer!", &name);
                 }
             }
         }

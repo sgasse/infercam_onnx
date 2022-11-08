@@ -55,6 +55,7 @@ impl NamedPubSub {
             }
         }
     }
+
     pub async fn get_mpsc_receiver(&self, name: &str) -> Option<MpscBytesReceiver> {
         let mut map = self.mpsc_map.lock().await;
         match map.get_mut(name) {
@@ -64,6 +65,13 @@ impl NamedPubSub {
                 map.insert(name.to_owned(), (tx, None));
                 Some(rx)
             }
+        }
+    }
+
+    pub async fn return_mpsc_receiver(&self, name: &str, rx: MpscBytesReceiver) {
+        let mut map = self.mpsc_map.lock().await;
+        if let Some((_, rx_opt)) = map.get_mut(name) {
+            rx_opt.replace(rx);
         }
     }
 }
