@@ -3,17 +3,16 @@ use crate::{
     pubsub::{BytesReceiver, BytesSender, MpscBytesReceiver, NamedPubSub},
     Error,
 };
-use image::ImageDecoder;
-use image::{
-    codecs::jpeg::{JpegDecoder, JpegEncoder},
-    ColorType, Rgb, RgbImage,
-};
+use image::{Rgb, RgbImage};
 use imageproc::drawing::{draw_hollow_rect, draw_text};
 use imageproc::rect::Rect;
 use lazy_static::lazy_static;
 use simple_error::SimpleError;
-use std::{collections::HashMap, io::Cursor};
-use std::{sync::Arc, time::Duration};
+use std::collections::HashMap;
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::{
     sync::{broadcast, mpsc, Mutex},
     task::JoinHandle,
@@ -194,36 +193,26 @@ impl Inferer {
         width: u32,
         height: u32,
     ) -> Result<Vec<u8>, Error> {
-        let frame = decode_frame(width, height, frame)?;
+        let start = Instant::now();
+        let frame: RgbImage = turbojpeg::decompress_image(frame.as_slice())?;
+        log::debug!("Decode frame took {:?}", start.elapsed());
+        let start = Instant::now();
         let bboxes_with_confidences = self.infer_faces(frame.clone())?;
+        log::debug!("Infer frame took {:?}", start.elapsed());
 
+        let start = Instant::now();
         let frame = draw_bboxes_on_image(frame, bboxes_with_confidences, width, height);
+        log::debug!("draw_bbox took {:?}", start.elapsed());
 
-        let mut buf = Cursor::new(Vec::new());
+        let start = Instant::now();
+        let buf = turbojpeg::compress_image(&frame, 95, turbojpeg::Subsamp::Sub2x2)?;
+        log::debug!("Encode as JPG took {:?}", start.elapsed());
 
-        JpegEncoder::new_with_quality(&mut buf, 70).encode(
-            &frame,
-            width,
-            height,
-            ColorType::Rgb8,
-        )?;
-
-        Ok(buf.into_inner())
+        Ok(buf.to_vec())
     }
 
     fn infer_faces(&self, frame: RgbImage) -> Result<Vec<(Bbox, f32)>, Error> {
         self.model.run(frame)
-    }
-}
-
-fn decode_frame(width: u32, height: u32, buffer: Box<Vec<u8>>) -> Result<RgbImage, Error> {
-    let decoder = JpegDecoder::new(Cursor::new(*buffer))?;
-    let mut target = vec![0; decoder.total_bytes() as usize];
-
-    decoder.read_image(&mut target)?;
-    match RgbImage::from_raw(width, height, target) {
-        None => Err(SimpleError::new("Could not decode frame").into()),
-        Some(frame) => Ok(frame),
     }
 }
 
