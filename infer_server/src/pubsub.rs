@@ -4,8 +4,8 @@ use tokio::sync::{broadcast, mpsc, Mutex};
 
 pub type BytesSender = broadcast::Sender<Vec<u8>>;
 pub type BytesReceiver = broadcast::Receiver<Vec<u8>>;
-pub type MpscBytesSender = mpsc::Sender<Vec<u8>>;
-pub type MpscBytesReceiver = mpsc::Receiver<Vec<u8>>;
+pub type MpscBytesSender = mpsc::Sender<Box<Vec<u8>>>;
+pub type MpscBytesReceiver = mpsc::Receiver<Box<Vec<u8>>>;
 
 pub struct NamedPubSub {
     broadcast_map: Mutex<HashMap<String, BytesSender>>,
