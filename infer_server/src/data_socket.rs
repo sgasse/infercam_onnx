@@ -58,7 +58,7 @@ async fn handle_incoming(stream: TcpStream, pubsub: Arc<NamedPubSub>) -> std::io
 
                 let send_infer_with_timeout =
                     tokio::time::timeout(std::time::Duration::from_millis(10), async {
-                        sender_infer.send(frame_msg.data).await
+                        sender_infer.send(Box::new(frame_msg.data)).await
                     });
                 if let Err(_) = send_infer_with_timeout.await {
                     // log::debug!(

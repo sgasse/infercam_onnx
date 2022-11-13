@@ -23,7 +23,7 @@ pub type RecvSendPair = (MpscBytesReceiver, BytesSender);
 
 pub struct InferBroker {
     channel_map: Mutex<HashMap<String, RecvSendPair>>,
-    infer_queue_tx: mpsc::Sender<(Vec<u8>, BytesSender, String)>,
+    infer_queue_tx: mpsc::Sender<(Box<Vec<u8>>, BytesSender, String)>,
     unsendable_rx: Mutex<mpsc::Receiver<String>>,
     infer_task: JoinHandle<()>,
     pubsub: Arc<NamedPubSub>,
@@ -136,14 +136,14 @@ impl InferBroker {
 
 pub struct Inferer {
     model: UltrafaceModel,
-    infer_queue_rx: mpsc::Receiver<(Vec<u8>, BytesSender, String)>,
+    infer_queue_rx: mpsc::Receiver<(Box<Vec<u8>>, BytesSender, String)>,
     unsendable_tx: mpsc::Sender<String>,
 }
 
 impl Inferer {
     pub fn new(
         model: UltrafaceModel,
-        infer_queue_rx: mpsc::Receiver<(Vec<u8>, BytesSender, String)>,
+        infer_queue_rx: mpsc::Receiver<(Box<Vec<u8>>, BytesSender, String)>,
         unsendable_tx: mpsc::Sender<String>,
     ) -> Self {
         Self {
@@ -188,7 +188,12 @@ impl Inferer {
         }
     }
 
-    fn process_frame(&self, frame: Vec<u8>, width: u32, height: u32) -> Result<Vec<u8>, Error> {
+    fn process_frame(
+        &self,
+        frame: Box<Vec<u8>>,
+        width: u32,
+        height: u32,
+    ) -> Result<Vec<u8>, Error> {
         let frame = decode_frame(width, height, frame)?;
         let bboxes_with_confidences = self.infer_faces(frame.clone())?;
 
@@ -211,8 +216,8 @@ impl Inferer {
     }
 }
 
-fn decode_frame(width: u32, height: u32, buffer: Vec<u8>) -> Result<RgbImage, Error> {
-    let decoder = JpegDecoder::new(Cursor::new(buffer))?;
+fn decode_frame(width: u32, height: u32, buffer: Box<Vec<u8>>) -> Result<RgbImage, Error> {
+    let decoder = JpegDecoder::new(Cursor::new(*buffer))?;
     let mut target = vec![0; decoder.total_bytes() as usize];
 
     decoder.read_image(&mut target)?;
