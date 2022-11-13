@@ -78,7 +78,7 @@ impl InferBroker {
     }
 
     pub async fn run(&self) {
-        let mut interval = tokio::time::interval(Duration::from_millis(1000));
+        let mut interval = tokio::time::interval(Duration::from_millis(10));
         loop {
             {
                 let mut channel_map = self.channel_map.lock().await;
