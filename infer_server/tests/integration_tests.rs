@@ -10,7 +10,7 @@ async fn test_ultraface_640() -> Result<(), Box<dyn std::error::Error>> {
 
     // `cargo test` and debugging the test via IDE have differing work dirs
     let test_pic_dir = {
-        let base_dir = "infercam_onnx/test_pics";
+        let base_dir = "resources/test_pics";
         match Path::new(base_dir).is_dir() {
             true => base_dir.to_owned(),
             false => format!("../{}", base_dir),
