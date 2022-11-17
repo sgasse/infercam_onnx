@@ -25,13 +25,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let inferer = Arc::new(InferBroker::new(Arc::clone(&pubsub)).await);
 
     let inferer_ = Arc::clone(&inferer);
-    let handle_inferer = tokio::spawn(async move {
+    tokio::spawn(async move {
         loop {
             inferer_.run().await;
         }
     });
 
-    let handle = spawn_data_socket(pubsub.clone()).await;
+    spawn_data_socket(pubsub.clone()).await;
 
     let app = Router::new()
         .route("/healthcheck", get(healthcheck))

@@ -32,7 +32,7 @@ pub async fn face_stream(
     Extension(inferer): Extension<Arc<InferBroker>>,
     Query(params): Query<StreamParams>,
 ) -> Result<impl IntoResponse, String> {
-    let name = params.name.unwrap_or("unknown".into());
+    let name = params.name.unwrap_or_else(|| "unknown".into());
     log::info!("Face stream for {} requested", &name);
 
     if let Ok(mut infered_rx) = inferer.subscribe_img_stream(&name, &pubsub).await {
@@ -68,7 +68,7 @@ pub async fn named_stream(
     Extension(pubsub): Extension<Arc<NamedPubSub>>,
     Query(params): Query<StreamParams>,
 ) -> impl IntoResponse {
-    let name = params.name.unwrap_or("unknown".into());
+    let name = params.name.unwrap_or_else(|| "unknown".into());
     log::info!("Stream for {} requested", &name);
 
     let mut rx = pubsub.get_broadcast_receiver(&name).await;
@@ -102,7 +102,7 @@ pub async fn recv_named_jpg_streams(
     Query(params): Query<StreamParams>,
     mut stream: BodyStream,
 ) {
-    let name = params.name.unwrap_or("unknown".into());
+    let name = params.name.unwrap_or_else(|| "unknown".into());
     log::info!("Receiving stream for name {}", &name);
     let sender = pubsub.get_broadcast_sender(&name).await;
 
@@ -123,7 +123,7 @@ pub async fn recv_named_jpg_streams(
                         log::debug!("Sending buffer");
 
                         let send_data = buf.get_ref()[0..(buf.position() as usize)].to_vec();
-                        if let Err(_) = sender.send(send_data) {
+                        if sender.send(send_data).is_err() {
                             log::warn!("Error sending for channel {}", &name);
                         }
 
@@ -160,7 +160,7 @@ pub async fn recv_jpgs_to_files(mut stream: BodyStream) {
                         log::debug!("Writing file");
 
                         let mut frame_file =
-                            File::create(&format!("frame-{}.jpg", counter)).unwrap();
+                            File::create(format!("frame-{}.jpg", counter)).unwrap();
                         frame_file
                             .write_all(&buf.get_ref()[0..(buf.position() as usize)])
                             .expect("Write to file");

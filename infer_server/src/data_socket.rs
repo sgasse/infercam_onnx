@@ -4,12 +4,11 @@ use common::protocol::ProtoMsg;
 use futures::StreamExt;
 use tokio::{
     net::{TcpListener, TcpStream},
-    sync::broadcast::Sender,
     task::JoinHandle,
 };
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-use crate::pubsub::{BytesSender, MpscBytesSender, NamedPubSub};
+use crate::pubsub::NamedPubSub;
 
 pub async fn spawn_data_socket(pubsub: Arc<NamedPubSub>) -> JoinHandle<Result<(), std::io::Error>> {
     tokio::spawn(async move {
@@ -52,19 +51,16 @@ async fn handle_incoming(stream: TcpStream, pubsub: Arc<NamedPubSub>) -> std::io
             let data = frame;
             let proto_msg: ProtoMsg = ProtoMsg::deserialize(&data[..]).unwrap();
             if let ProtoMsg::FrameMsg(frame_msg) = proto_msg {
-                if let Err(_) = sender_raw.send(frame_msg.data.clone()) {
-                    // log::debug!("Send error for id {} - probably no listener", &frame_msg.id);
+                if sender_raw.send(frame_msg.data.clone()).is_err() {
+                    // Error in sending usually means no listener
                 }
 
                 let send_infer_with_timeout =
                     tokio::time::timeout(std::time::Duration::from_millis(10), async {
-                        sender_infer.send(Box::new(frame_msg.data)).await
+                        sender_infer.send(frame_msg.data).await
                     });
-                if let Err(_) = send_infer_with_timeout.await {
-                    // log::debug!(
-                    //     "Send error infer for id {} - probably no listener",
-                    //     &frame_msg.id
-                    // );
+                if send_infer_with_timeout.await.is_err() {
+                    // Error in sending usually means no listener
                 } else {
                     log::debug!("Data socket of {} sent to infer!", &name);
                 }

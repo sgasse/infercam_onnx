@@ -12,8 +12,8 @@ type NnOut = SmallVec<[Arc<Tensor>; 4]>;
 /// Positive additive constant to avoid divide-by-zero.
 const EPS: f32 = 1.0e-7;
 
-const ULTRAFACE_LINK_640: &'static str = "https://github.com/onnx/models/raw/main/vision/body_analysis/ultraface/models/version-RFB-640.onnx";
-const ULTRAFACE_LINK_320: &'static str = "https://github.com/onnx/models/raw/main/vision/body_analysis/ultraface/models/version-RFB-320.onnx";
+const ULTRAFACE_LINK_640: &str = "https://github.com/onnx/models/raw/main/vision/body_analysis/ultraface/models/version-RFB-640.onnx";
+const ULTRAFACE_LINK_320: &str = "https://github.com/onnx/models/raw/main/vision/body_analysis/ultraface/models/version-RFB-320.onnx";
 
 pub trait InferModel {
     fn run(&self, input: RgbImage) -> Result<Vec<(Bbox, f32)>, Error>;
@@ -169,14 +169,14 @@ fn non_maximum_suppression(
             Some((bbox, confidence)) => {
                 // Check for overlap with any of the selected bboxes
                 for (selected_bbox, _) in selected.iter() {
-                    match iou(&bbox, selected_bbox) {
+                    match iou(bbox, selected_bbox) {
                         x if x > max_iou => continue 'candidates,
                         _ => (),
                     }
                 }
 
                 // bbox has no large overlap with any of the selected ones, add it
-                selected.push((bbox.clone(), confidence.clone()))
+                selected.push((*bbox, *confidence))
             }
             None => break 'candidates,
         }
