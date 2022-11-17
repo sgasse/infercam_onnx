@@ -4,8 +4,8 @@ use tokio::sync::{broadcast, mpsc, Mutex};
 
 pub type BytesSender = broadcast::Sender<Vec<u8>>;
 pub type BytesReceiver = broadcast::Receiver<Vec<u8>>;
-pub type MpscBytesSender = mpsc::Sender<Box<Vec<u8>>>;
-pub type MpscBytesReceiver = mpsc::Receiver<Box<Vec<u8>>>;
+pub type MpscBytesSender = mpsc::Sender<Vec<u8>>;
+pub type MpscBytesReceiver = mpsc::Receiver<Vec<u8>>;
 
 pub struct NamedPubSub {
     broadcast_map: Mutex<HashMap<String, BytesSender>>,
@@ -47,7 +47,7 @@ impl NamedPubSub {
     pub async fn get_mpsc_sender(&self, name: &str) -> MpscBytesSender {
         let mut map = self.mpsc_map.lock().await;
         match map.get(name) {
-            Some((tx, _)) => return tx.clone(),
+            Some((tx, _)) => tx.clone(),
             None => {
                 let (tx, rx) = mpsc::channel(1);
                 map.insert(name.to_owned(), (tx.clone(), Some(rx)));
@@ -73,5 +73,11 @@ impl NamedPubSub {
         if let Some((_, rx_opt)) = map.get_mut(name) {
             rx_opt.replace(rx);
         }
+    }
+}
+
+impl Default for NamedPubSub {
+    fn default() -> Self {
+        Self::new()
     }
 }

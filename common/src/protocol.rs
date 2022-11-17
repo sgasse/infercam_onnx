@@ -19,7 +19,7 @@ impl FrameMsg {
 }
 
 impl ProtoMsg {
-    pub fn deserialize<'a>(bytes: &'a [u8]) -> Result<Self, Box<bincode::ErrorKind>> {
+    pub fn deserialize(bytes: &[u8]) -> Result<Self, Box<bincode::ErrorKind>> {
         bincode::deserialize(bytes)
     }
 }

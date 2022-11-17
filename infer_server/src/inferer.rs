@@ -26,9 +26,9 @@ pub type RecvSendPair = (MpscBytesReceiver, BytesSender);
 
 pub struct InferBroker {
     channel_map: Mutex<HashMap<String, RecvSendPair>>,
-    infer_queue_tx: mpsc::Sender<(Box<Vec<u8>>, BytesSender, String)>,
+    infer_queue_tx: mpsc::Sender<(Vec<u8>, BytesSender, String)>,
     unsendable_rx: Mutex<mpsc::Receiver<String>>,
-    infer_task: JoinHandle<()>,
+    _infer_task: JoinHandle<()>,
     pubsub: Arc<NamedPubSub>,
 }
 
@@ -39,18 +39,16 @@ impl InferBroker {
             .expect("Initialize model");
         let (infer_queue_tx, infer_queue_rx) = mpsc::channel(1);
         let (unsendable_tx, unsendable_rx) = mpsc::channel(20);
-        let infer_task = tokio::spawn(async move {
+        let _infer_task = tokio::spawn(async move {
             let mut inferer = Inferer::new(model, infer_queue_rx, unsendable_tx);
             loop {
                 inferer.run().await;
             }
-
-            ()
         });
         Self {
             channel_map: Mutex::new(HashMap::new()),
             infer_queue_tx,
-            infer_task,
+            _infer_task,
             unsendable_rx: Mutex::new(unsendable_rx),
             pubsub,
         }
@@ -139,14 +137,14 @@ impl InferBroker {
 
 pub struct Inferer {
     model: UltrafaceModel,
-    infer_queue_rx: mpsc::Receiver<(Box<Vec<u8>>, BytesSender, String)>,
+    infer_queue_rx: mpsc::Receiver<(Vec<u8>, BytesSender, String)>,
     unsendable_tx: mpsc::Sender<String>,
 }
 
 impl Inferer {
     pub fn new(
         model: UltrafaceModel,
-        infer_queue_rx: mpsc::Receiver<(Box<Vec<u8>>, BytesSender, String)>,
+        infer_queue_rx: mpsc::Receiver<(Vec<u8>, BytesSender, String)>,
         unsendable_tx: mpsc::Sender<String>,
     ) -> Self {
         Self {
@@ -182,21 +180,14 @@ impl Inferer {
                     }
                 };
 
-                if remove_name {
-                    if let Err(_) = self.unsendable_tx.send(name).await {
-                        log::error!("Could not send name to remove");
-                    }
+                if remove_name && self.unsendable_tx.send(name).await.is_err() {
+                    log::error!("Could not send name to remove");
                 }
             }
         }
     }
 
-    fn process_frame(
-        &self,
-        frame: Box<Vec<u8>>,
-        width: u32,
-        height: u32,
-    ) -> Result<Vec<u8>, Error> {
+    fn process_frame(&self, frame: Vec<u8>, width: u32, height: u32) -> Result<Vec<u8>, Error> {
         let start = Instant::now();
         let frame: RgbImage = turbojpeg::decompress_image(frame.as_slice())?;
         log::debug!("Decode frame took {:?}", start.elapsed());
@@ -244,8 +235,8 @@ fn draw_bboxes_on_image(
 
         frame = draw_hollow_rect(&frame, face_rect, Rgb::from([0, 255, 0]));
         frame = draw_text(
-            &mut frame,
-            color.clone(),
+            &frame,
+            color,
             x_tl as i32,
             y_tl as i32,
             rusttype::Scale { x: 16.0, y: 16.0 },
