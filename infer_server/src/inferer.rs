@@ -1,21 +1,25 @@
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
+use image::{Rgb, RgbImage};
+use imageproc::{
+    drawing::{draw_hollow_rect, draw_text},
+    rect::Rect,
+};
+use lazy_static::lazy_static;
+use simple_error::SimpleError;
+use tokio::{
+    sync::{broadcast, mpsc, Mutex},
+    task::JoinHandle,
+};
+
 use crate::{
     nn::{Bbox, InferModel, UltrafaceModel},
     pubsub::{BytesReceiver, BytesSender, MpscBytesReceiver, NamedPubSub},
     Error,
-};
-use image::{Rgb, RgbImage};
-use imageproc::drawing::{draw_hollow_rect, draw_text};
-use imageproc::rect::Rect;
-use lazy_static::lazy_static;
-use simple_error::SimpleError;
-use std::collections::HashMap;
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
-use tokio::{
-    sync::{broadcast, mpsc, Mutex},
-    task::JoinHandle,
 };
 
 pub type RecvSendPair = (MpscBytesReceiver, BytesSender);

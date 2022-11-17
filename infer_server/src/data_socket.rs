@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use common::protocol::ProtoMsg;
 use futures::StreamExt;
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -9,7 +10,6 @@ use tokio::{
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 use crate::pubsub::{BytesSender, MpscBytesSender, NamedPubSub};
-use common::protocol::ProtoMsg;
 
 pub async fn spawn_data_socket(pubsub: Arc<NamedPubSub>) -> JoinHandle<Result<(), std::io::Error>> {
     tokio::spawn(async move {
