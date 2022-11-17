@@ -1,73 +1,103 @@
 # InferCam ONNX
 
-Turn your webcam into a face detector with Rust, [`onnxruntime`][onnxruntime] and the lightweight [ultraface
-network][ultraface-gh].
-
-![InferCam Example Image](./resources/infercam_onnx_example.jpg)
+Client/server face detection from your webcam with Rust,
+[`onnxruntime`][onnxruntime] and the lightweight
+[ultraface network][ultraface-gh].
 
 ## Overview
-- Images are captured from the `/dev/video0` interface using the `libv4l-dev` library on Linux with the [`rscam`][rscam] crate.
-- Captured frames are passed through a pre-trained network stored in the [`onnx`][onnxruntime] format, powered by the no-frills `onnxruntime` wrapper [`tract`][tract].
+
+This is my second implementation of this project. Changes to the first version:
+
+- In the first version, we had a monolith that captured frames, infered faces,
+  drew the results on the frames and served them in the browser. In this
+  version, capturing frames and infering them are separated into two binaries.
+  By separating the capturing from the inference/serving, we can capture and
+  send a stream also from devices which are not powerful enough to do the
+  inference. Inference in the cloud also becomes possible.
+- The `infer_server` is powered by the [`axum`][axum] framework, receives
+  streams and serves endpoints of both the raw streams and streams with faces
+  infered. The previous version used [`actix-web`][actix-web] as web framework,
+  switching to [`axum`][axum] was mostly curiosity.
+- `socket_sender` establishes a TCP connection to the `infer_sender` and streams
+  frames to it which can be shown raw or infered in the browser.
+- `multipart_sender` allows us to send a stream as multipart form data via HTTP
+  to the `infer_server`. It does not yield a good performance in practice and is
+  only left in here for reference purposes.
+- In the first version, opening a tab to either the raw or infered stream
+  endpoint triggered an independent run of the capture function. So opening four
+  tabs meant having four streams capture independently. In the refactored
+  version, one stream can be viewed by many people at the same time.
+- Broadcast channels enable us to serve the same raw stream to many people.
+- With a combination of `mpsc` and broadcast channels, we make sure that a raw
+  stream is only infered if there is at least one person watching the infered
+  stream and that at the same time several people can watch the stream while the
+  inference has to be done only once per frame.
+- In the first version, we used the JPEG encoding/decoding built into the
+  `image-rs` library. On my machine, this means 60-70ms delay to decode a frame.
+  For this reason, we captured the frame directly as raw bitmap when we wanted
+  to do inference with it. This however cannot be streamed directly to the
+  browser. In this version, we capture the frames as JPEG so that they can be
+  served directly as raw stream to the browser, but we use the performant
+  [turbojpeg][turbojpeg] library which yields far better performance for
+  decoding/encoding (around 15ms instead of 60ms on my machine).
+
+Things that stayed the same:
+
+- Images are captured from the `/dev/video0` interface using the `libv4l-dev`
+  library on Linux with the [`rscam`][rscam] crate.
+- Captured frames are passed through a pre-trained network stored in the
+  [`onnx`][onnxruntime] format, powered by the no-frills `onnxruntime` wrapper
+  [`tract`][tract].
 - Post-processing (mainly non-maximum suppression) is done in native Rust.
-- Detected faces are drawn as bounding boxes on the frame with their confidences using [`imageproc`][imageproc].
-- Streams from the raw video and the face detection are served in the browser with the performant [`actix_web`][actix] framework.
+- Detected faces are drawn as bounding boxes on the frame with their confidences
+  using [`imageproc`][imageproc].
 
 ## Building & Running
+
 - Make sure that you have the `libv4l-dev` package installed on your system:
+
 ```bash
 sudo apt update && sudo apt install -y libv4l-dev
 ```
 
-- Download a build of the `onnxruntime` from Microsoft [here][download_onnxruntime] and
-install it on your system (e.g. copying the `.so` files to `~/.local/lib).
+- Download a build of the `onnxruntime` from Microsoft
+  [here][download_onnxruntime] and install it on your system (e.g. copying the
+  `.so` files to `~/.local/lib).
 
-- Download the [pretrained ultraface networks][pretrained_ultraface] to the root of the repository:
+- The [pretrained ultraface networks][pretrained_ultraface] will be
+  auto-donwloaded to the local cache directory.
+
+- Run an `infer_server` and a `socket_sender` in release mode (for more FPS):
+
 ```bash
-wget https://github.com/onnx/models/raw/master/vision/body_analysis/ultraface/models/version-RFB-320.onnx
-wget https://github.com/onnx/models/raw/master/vision/body_analysis/ultraface/models/version-RFB-640.onnx
+# Run server in one terminal
+RUST_LOG=infer_server=debug cargo run --release infer_server
+
+# Run socket sender in another terminal
+RUST_LOG=debug cargo run --release --bin socket_sender
 ```
 
-- Build in release mode (there is a difference of factor 32 in fps between release and debug mode on my system):
-```bash
-cargo build --release
-```
-
-- Run the application:
-```bash
-# Without logging
-./target/release/infercam_onnx
-
-# With debug logging
-RUST_LOG=debug ./target/release/infercam_onnx
-```
-
-- You can see the face detection at [http://127.0.0.1:8080/](http://127.0.0.1:8080/). The raw webcam stream is also available at [http://127.0.0.1:8080/video_stream](http://127.0.0.1:8080/video_stream).
-- There are two command line arguments:
-  - `--port XYZ` binds to the port XYZ.
-  - `--bindall` publishes the routes on all network interfaces, not just the localhost.
+- The raw stream is served at
+  [http://127.0.0.1:3000/stream?name=simon](http://127.0.0.1:3000/stream?name=simon).
+- The infered stream is available at
+  [http://127.0.0.1:3000/face_stream?name=simon](http://127.0.0.1:3000/face_stream?name=simon)
 
 ## Comments
-I developed this project for fun and for auto-didactic purposes. Since I have not worked with Rust
-professionally, some things might not be completely idiomatic or top-notch performant.
-Nevertheless, the application runs at around 8-9fps on my private laptop with a `i7-6600U` and no
-dedicated GPU (when compiled with optimizations in release mode).
 
 Initially, I considered using the [`onnxruntime` crate][onnxrcrate], but that did not work out of
 the box and when I checked on GitHub, the project seems to be a lot less active than [`tract`][tract].
 
 Not having a dedicated GPU on my private laptop, I did not go through the process of setting up
 inference with [`onnxruntime`][onnxruntime] on GPU, but it should not be so much different.
-An accepted inefficiency in the current implementation is that we clone the network output into
-vectors for sorting. With more time, I would take a look at sorting the output in-place.
 
 It also took a while to understand the exact meaning of the network output since I could not find
 a paper/blogpost explaining it in the level of detail that I needed here. At the end, I went to the
 [python demo code][py_demo_code] and reverse-engineered the meaning. I believe the output can be
 interpreted like this:
+
 - `K`: Number of bounding box proposals.
 - `result[0]`: `1xKx2` tensor of bounding box confidences. The confidences for having a face in the bounding box are in the second column, so at `[:,:,1]`.
 - `result[1]`: `1xKx4` tensor of bounding box candidate border points.
-
 
 Every candidate bounding box consists of the **relative** coordinates `[x_top_left, y_top_left, x_bottom_right, y_bottom_right]`. They can be multiplied with the `width` and `height` of the original image to obtain the bounding box coordinates for the real frame.
 
@@ -77,13 +107,15 @@ All in all, it was a nice project for me and a valuable proof of concept that Ru
 is definitely a candidate language when considering to write an application for inference on edge
 devices.
 
+[actix-web]: https://actix.rs/
+[axum]: https://github.com/tokio-rs/axum
+[download_onnxruntime]: https://github.com/microsoft/onnxruntime/releases/tag/v1.9.0
+[imageproc]: https://crates.io/crates/imageproc
+[onnxrcrate]: https://crates.io/crates/onnxruntime/0.0.13
 [onnxruntime]: https://github.com/microsoft/onnxruntime
-[ultraface-gh]: https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB
+[pretrained_ultraface]: https://github.com/onnx/models/tree/master/vision/body_analysis/ultraface
+[py_demo_code]: https://github.com/onnx/models/blob/master/vision/body_analysis/ultraface/dependencies/box_utils.py#L111
 [rscam]: https://crates.io/crates/rscam
 [tract]: https://crates.io/crates/tract
-[imageproc]: https://crates.io/crates/imageproc
-[actix]: https://actix.rs/
-[download_onnxruntime]: https://github.com/microsoft/onnxruntime/releases/tag/v1.9.0
-[pretrained_ultraface]: https://github.com/onnx/models/tree/master/vision/body_analysis/ultraface
-[onnxrcrate]: https://crates.io/crates/onnxruntime/0.0.13
-[py_demo_code]: https://github.com/onnx/models/blob/master/vision/body_analysis/ultraface/dependencies/box_utils.py#L111
+[turbojpeg]: https://docs.rs/turbojpeg/latest/turbojpeg/
+[ultraface-gh]: https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB
