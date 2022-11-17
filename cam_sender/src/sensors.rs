@@ -82,25 +82,29 @@ impl Stream for StreamableCamera {
 #[cfg(test)]
 mod test {
 
-    use rscam::Camera;
+    #[cfg(webcam)]
+    mod webcam_tests {
 
-    use crate::Error;
+        use rscam::Camera;
 
-    #[test]
-    fn get_cam_resolution() -> Result<(), Error> {
-        let cam_name = "/dev/video0";
-        let cam = Camera::new(cam_name)?;
+        use crate::Error;
 
-        println!("Supported formats:");
-        for format in cam.formats() {
-            dbg!(format?);
+        #[test]
+        fn get_cam_resolution() -> Result<(), Error> {
+            let cam_name = "/dev/video0";
+            let cam = Camera::new(cam_name)?;
+
+            println!("Supported formats:");
+            for format in cam.formats() {
+                dbg!(format?);
+            }
+
+            println!("Supported interval:");
+            for interval in cam.intervals("MJPG".as_bytes(), (1280, 720)) {
+                dbg!(interval);
+            }
+
+            Ok(())
         }
-
-        println!("Supported interval:");
-        for interval in cam.intervals("MJPG".as_bytes(), (1280, 720)) {
-            dbg!(interval);
-        }
-
-        Ok(())
     }
 }

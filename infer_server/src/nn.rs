@@ -116,7 +116,7 @@ impl UltrafaceModel {
 
         let model_file_dir = dirs::cache_dir().expect("cache dir").join("infercam_onnx");
         if !model_file_dir.is_dir() {
-            std::fs::create_dir(&model_file_dir)?;
+            std::fs::create_dir_all(&model_file_dir)?;
         }
 
         let model_file_path = model_file_dir.join(model_name);
