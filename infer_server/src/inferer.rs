@@ -293,11 +293,9 @@ mod test {
                 return Err::<(), String>("This is a real error!".to_owned());
             });
         let result = err_before_timeout.await;
-        match result {
-            Ok(_) => panic!("Expected error type"),
-            Err(elapsed) => {
-                assert!(elapsed.source().is_some());
-            }
-        }
+        assert_eq!(
+            result,
+            Ok(Err::<(), String>("This is a real error!".to_owned()))
+        );
     }
 }
