@@ -218,7 +218,7 @@ checksum = "ec8a7b6a70fde80372154c65702f00a0f56f3e1c36abbc6c440484be248856db"
 
 [[package]]
 name = "cam_sender"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "bincode",
  "bytes",
@@ -300,7 +300,7 @@ checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
 
 [[package]]
 name = "common"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "bincode",
  "serde",
@@ -947,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "infer_server"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "async-stream",
  "axum",

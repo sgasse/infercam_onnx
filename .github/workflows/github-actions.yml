@@ -42,7 +42,7 @@ jobs:
       - name: Lint
         run: |
           cargo +nightly fmt -- --check
-          cargo +nightly clippy -- -D warnings
+          cargo +nightly clippy --no-deps -- -D warnings
 
       - name: Test
         run: |
