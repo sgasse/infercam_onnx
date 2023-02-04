@@ -61,7 +61,7 @@ pub async fn face_stream(
         return Ok((headers, body));
     }
 
-    return Err(format!("Could not setup face stream for {}", name));
+    Err(format!("Could not setup face stream for {name}"))
 }
 
 pub async fn named_stream(
@@ -159,8 +159,7 @@ pub async fn recv_jpgs_to_files(mut stream: BodyStream) {
                         log::debug!("Buf position {}", buf.position());
                         log::debug!("Writing file");
 
-                        let mut frame_file =
-                            File::create(format!("frame-{}.jpg", counter)).unwrap();
+                        let mut frame_file = File::create(format!("frame-{counter}.jpg")).unwrap();
                         frame_file
                             .write_all(&buf.get_ref()[0..(buf.position() as usize)])
                             .expect("Write to file");

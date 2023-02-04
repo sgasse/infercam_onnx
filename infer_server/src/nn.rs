@@ -7,7 +7,7 @@ use crate::{utils::download_file, Error};
 
 pub type Bbox = [f32; 4];
 type NnModel = SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>;
-type NnOut = SmallVec<[Arc<Tensor>; 4]>;
+type NnOut = SmallVec<[TValue; 4]>;
 
 /// Positive additive constant to avoid divide-by-zero.
 const EPS: f32 = 1.0e-7;
@@ -51,7 +51,7 @@ impl UltrafaceModel {
         })
     }
 
-    fn preproc(&self, input: RgbImage) -> Tensor {
+    fn preproc(&self, input: RgbImage) -> TValue {
         let resized: RgbImage = image::imageops::resize(
             &input,
             self.width,
@@ -71,7 +71,7 @@ impl UltrafaceModel {
         )
         .into();
 
-        tensor
+        TValue::from_const(Arc::new(tensor))
     }
 
     fn postproc(&self, raw_nn_out: NnOut) -> Result<Vec<(Bbox, f32)>, Error> {
