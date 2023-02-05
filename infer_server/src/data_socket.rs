@@ -1,6 +1,6 @@
 //! Data socket module to receive image streams via network.
 //!
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use common::protocol::ProtoMsg;
 use futures::StreamExt;
@@ -10,13 +10,16 @@ use tokio::{
 };
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-use crate::pubsub::NamedPubSub;
+use crate::{pubsub::NamedPubSub, Error};
 
 /// Spawn a data socket and register the stream with the Pub/Sub-Engine.
-pub async fn spawn_data_socket(pubsub: Arc<NamedPubSub>) -> JoinHandle<Result<(), std::io::Error>> {
-    tokio::spawn(async move {
-        let addr = "127.0.0.1:3001";
-        let listener = TcpListener::bind(addr).await?;
+pub async fn spawn_data_socket(
+    pubsub: Arc<NamedPubSub>,
+    addr: &str,
+) -> Result<JoinHandle<Result<(), std::io::Error>>, Error> {
+    let socket: SocketAddr = addr.parse()?;
+    Ok(tokio::spawn(async move {
+        let listener = TcpListener::bind(socket).await?;
 
         loop {
             let (socket, _) = listener.accept().await?;
@@ -26,7 +29,7 @@ pub async fn spawn_data_socket(pubsub: Arc<NamedPubSub>) -> JoinHandle<Result<()
                 Ok::<_, std::io::Error>(())
             });
         }
-    })
+    }))
 }
 
 /// Handle an incoming image stream.

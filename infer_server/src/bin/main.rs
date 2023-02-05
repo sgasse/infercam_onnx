@@ -3,6 +3,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use axum::{routing::get, Extension, Router};
+use clap::Parser;
 use env_logger::TimestampPrecision;
 use infer_server::{
     data_socket::spawn_data_socket,
@@ -12,8 +13,22 @@ use infer_server::{
     Error,
 };
 
+#[derive(Parser, Debug)]
+#[clap(author, version)]
+struct Args {
+    /// Address of the infer server to connect to
+    #[clap(long, default_value = "127.0.0.1:3000")]
+    server_address: String,
+
+    /// Address of the infer server to connect to
+    #[clap(long, default_value = "127.0.0.1:3001")]
+    socket_address: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    let args = Args::parse();
+
     // Setup logger
     env_logger::builder()
         .format_timestamp(Some(TimestampPrecision::Millis))
@@ -34,7 +49,7 @@ async fn main() -> Result<(), Error> {
     });
 
     // Create socket to receive image streams via network
-    spawn_data_socket(pubsub.clone()).await;
+    spawn_data_socket(pubsub.clone(), &args.socket_address).await?;
 
     // Build HTTP server with endpoints
     let app = Router::new()
@@ -45,11 +60,10 @@ async fn main() -> Result<(), Error> {
         .layer(Extension(inferer));
 
     // Serve HTTP server
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr: SocketAddr = args.server_address.parse()?;
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
-        .await
-        .unwrap();
+        .await?;
 
     Ok(())
 }
