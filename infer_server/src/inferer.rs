@@ -34,7 +34,7 @@ pub struct InferBroker {
 
 impl InferBroker {
     pub async fn new(pubsub: Arc<NamedPubSub>) -> Self {
-        let model = UltrafaceModel::new(crate::nn::UltrafaceVariant::W320H240)
+        let model = UltrafaceModel::new(crate::nn::UltrafaceVariant::W320H240, 0.5, 0.5)
             .await
             .expect("Initialize model");
         let (infer_queue_tx, infer_queue_rx) = mpsc::channel(1);
@@ -100,7 +100,7 @@ impl InferBroker {
                                 {
                                     Ok(()) => log::debug!("Send frame of {} to inferer", &name),
                                     Err(err) => log::debug!(
-                                        "Could not end fame of {} inferer: {}",
+                                        "Could not send frame of {} to inferer: {}",
                                         &name,
                                         &err,
                                     ),

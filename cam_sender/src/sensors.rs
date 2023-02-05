@@ -1,3 +1,5 @@
+//! Sensors module.
+//!
 use std::pin::Pin;
 
 use bytes::Bytes;
@@ -11,7 +13,8 @@ use crate::Error;
 
 pub type CaptureFn = Box<dyn Fn() -> Option<Frame> + Send + Sync>;
 
-pub fn get_capture_fn(
+/// Get a capture function to a video device on a Linux machine.
+pub fn get_capture_fn_linux(
     device_name: &str,
     resolution: (u32, u32),
     format: &str,
@@ -35,7 +38,7 @@ pub fn get_capture_fn(
     Ok(Box::new(callback))
 }
 
-/// Keep a handle to the capture function of an initialized camera.
+/// Initialized, streamable camera.
 pub struct StreamableCamera {
     capture_fn: CaptureFn,
 }
@@ -48,6 +51,7 @@ impl StreamableCamera {
         }
     }
 
+    /// Capture a frame.
     pub fn capture(&self) -> Option<Frame> {
         (*self.capture_fn)()
     }
@@ -59,13 +63,8 @@ impl Stream for StreamableCamera {
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match (*self.capture_fn)() {
             Some(frame) => {
-                // TODO Remove
-                use std::time::Duration;
-                std::thread::sleep(Duration::from_secs(2));
-
                 // Append `\n\n` to mark the end of a frame
                 let body = Bytes::copy_from_slice(&[&frame[..], "\n\n".as_bytes()].concat());
-                // let body = Bytes::copy_from_slice(&["test".as_bytes(), "\n\n".as_bytes()].concat());
 
                 log::debug!("Streaming... ({} bytes)", body.len());
 
@@ -99,8 +98,8 @@ mod test {
                 dbg!(format?);
             }
 
-            println!("Supported interval:");
-            for interval in cam.intervals("MJPG".as_bytes(), (1280, 720)) {
+            if let Ok(interval) = cam.intervals("MJPG".as_bytes(), (1280, 720)) {
+                println!("Supported interval:");
                 dbg!(interval);
             }
 

@@ -1,32 +1,26 @@
-use std::{
-    fs::File,
-    io::{Cursor, Write},
-    sync::Arc,
-};
+//! Endpoints of HTTP server.
+//!
+use std::sync::Arc;
 
-use axum::{
-    body::StreamBody,
-    extract::{BodyStream, Query},
-    http::header,
-    response::IntoResponse,
-    Extension,
-};
+use axum::{body::StreamBody, extract::Query, http::header, response::IntoResponse, Extension};
 use bytes::Bytes;
-use futures::stream::StreamExt;
 use serde::Deserialize;
 
 use crate::{inferer::InferBroker, pubsub::NamedPubSub};
 
+/// Search parameters available to streams.
 #[derive(Debug, Deserialize)]
 pub struct StreamParams {
     #[serde(default)]
     name: Option<String>,
 }
 
+/// Health check endpoint.
 pub async fn healthcheck() -> &'static str {
     "Healthy"
 }
 
+/// Endpoint of received image streams with faces+confidences infered.
 pub async fn face_stream(
     Extension(pubsub): Extension<Arc<NamedPubSub>>,
     Extension(inferer): Extension<Arc<InferBroker>>,
@@ -35,10 +29,17 @@ pub async fn face_stream(
     let name = params.name.unwrap_or_else(|| "unknown".into());
     log::info!("Face stream for {} requested", &name);
 
+    // Subscribe to an infered image stream.
+    // If there is already at least one client connected which receives the stream with the same
+    // name, this will only clone the receiving end of the respective broadcast channel thus the
+    // inference is only done once regardless of how many people subscribe in parallel.
+    // If this client is the first to request the stream, the inferer will request the receiving
+    // end of the MPSC channel of this name and add it to the channels which it periodically checks
+    // for new data and infers.
     if let Ok(mut infered_rx) = inferer.subscribe_img_stream(&name, &pubsub).await {
         let stream = async_stream::stream! {
             while let Ok(item) = infered_rx.recv().await {
-                // log::debug!("Next iteration in face stream");
+                // Wrap data with frame separator for multipart streaming
                 let data: Bytes = Bytes::copy_from_slice(
                     &[
                         "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
@@ -52,6 +53,7 @@ pub async fn face_stream(
             log::info!("Exited stream for {}", &name);
         };
 
+        // Set body and headers for multipart streaming
         let body = StreamBody::new(stream);
         let headers = [(
             header::CONTENT_TYPE,
@@ -64,6 +66,7 @@ pub async fn face_stream(
     Err(format!("Could not setup face stream for {name}"))
 }
 
+/// Endpoint of received image streams.
 pub async fn named_stream(
     Extension(pubsub): Extension<Arc<NamedPubSub>>,
     Query(params): Query<StreamParams>,
@@ -71,11 +74,12 @@ pub async fn named_stream(
     let name = params.name.unwrap_or_else(|| "unknown".into());
     log::info!("Stream for {} requested", &name);
 
+    // Subscribe to a broadcasted received image stream.
     let mut rx = pubsub.get_broadcast_receiver(&name).await;
 
     let stream = async_stream::stream! {
         while let Ok(item) = rx.recv().await {
-            // log::debug!("Next iteration in video stream");
+            // Wrap data with frame separator for multipart streaming
             let data: Bytes = Bytes::copy_from_slice(
                 &[
                     "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
@@ -88,6 +92,7 @@ pub async fn named_stream(
         log::info!("Exited stream for {}", &name);
     };
 
+    // Set body and headers for multipart streaming
     let body = StreamBody::new(stream);
     let headers = [(
         header::CONTENT_TYPE,
@@ -95,85 +100,4 @@ pub async fn named_stream(
     )];
 
     (headers, body)
-}
-
-pub async fn recv_named_jpg_streams(
-    Extension(pubsub): Extension<Arc<NamedPubSub>>,
-    Query(params): Query<StreamParams>,
-    mut stream: BodyStream,
-) {
-    let name = params.name.unwrap_or_else(|| "unknown".into());
-    log::info!("Receiving stream for name {}", &name);
-    let sender = pubsub.get_broadcast_sender(&name).await;
-
-    let mut buf = Cursor::new(vec![0_u8; 200000]);
-    while let Some(Ok(data)) = stream.next().await {
-        log::debug!("Data length {}", data.len());
-        match data.ends_with("\r\n".as_bytes()) {
-            true => {
-                log::debug!("Skipping header {:?}", data);
-            }
-            false => {
-                // No header
-                match data.ends_with("\n\n".as_bytes()) {
-                    true => {
-                        // The last two bytes are the separation marker
-                        buf.write_all(&data[..(data.len() - 2)]).expect("write");
-                        log::debug!("Buf position {}", buf.position());
-                        log::debug!("Sending buffer");
-
-                        let send_data = buf.get_ref()[0..(buf.position() as usize)].to_vec();
-                        if sender.send(send_data).is_err() {
-                            log::warn!("Error sending for channel {}", &name);
-                        }
-
-                        buf.set_position(0);
-                    }
-                    false => {
-                        log::debug!("Writing {} bytes", data.len());
-                        buf.write_all(&data).expect("write");
-                        log::debug!("Buf position {}", buf.position());
-                    }
-                }
-            }
-        }
-    }
-}
-
-pub async fn recv_jpgs_to_files(mut stream: BodyStream) {
-    let mut counter = 0;
-
-    let mut buf = Cursor::new(vec![0_u8; 100000]);
-    while let Some(Ok(data)) = stream.next().await {
-        log::debug!("Data length {}", data.len());
-        match data.ends_with("\r\n".as_bytes()) {
-            true => {
-                log::debug!("Skipping header {:?}", data);
-            }
-            false => {
-                // No header
-                match data.ends_with("\n\n".as_bytes()) {
-                    true => {
-                        // The last two bytes are the separation marker
-                        buf.write_all(&data[..(data.len() - 2)]).expect("write");
-                        log::debug!("Buf position {}", buf.position());
-                        log::debug!("Writing file");
-
-                        let mut frame_file = File::create(format!("frame-{counter}.jpg")).unwrap();
-                        frame_file
-                            .write_all(&buf.get_ref()[0..(buf.position() as usize)])
-                            .expect("Write to file");
-                        counter += 1;
-
-                        buf.set_position(0);
-                    }
-                    false => {
-                        log::debug!("Writing {} bytes", data.len());
-                        buf.write_all(&data).expect("write");
-                        log::debug!("Buf position {}", buf.position());
-                    }
-                }
-            }
-        }
-    }
 }
