@@ -1,3 +1,5 @@
+//! Data socket module to receive image streams via network.
+//!
 use std::sync::Arc;
 
 use common::protocol::ProtoMsg;
@@ -10,6 +12,7 @@ use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 use crate::pubsub::NamedPubSub;
 
+/// Spawn a data socket and register the stream with the Pub/Sub-Engine.
 pub async fn spawn_data_socket(pubsub: Arc<NamedPubSub>) -> JoinHandle<Result<(), std::io::Error>> {
     tokio::spawn(async move {
         let addr = "127.0.0.1:3001";
@@ -26,6 +29,7 @@ pub async fn spawn_data_socket(pubsub: Arc<NamedPubSub>) -> JoinHandle<Result<()
     })
 }
 
+/// Handle an incoming image stream.
 async fn handle_incoming(stream: TcpStream, pubsub: Arc<NamedPubSub>) -> std::io::Result<()> {
     let addr = stream.peer_addr()?;
     log::info!("{}: New connection", &addr);
@@ -44,6 +48,16 @@ async fn handle_incoming(stream: TcpStream, pubsub: Arc<NamedPubSub>) -> std::io
     };
 
     if let Some(name) = name {
+        // We send received frames **twice**. The reason behind this is that infering an image takes
+        // a lot longer than just pushing it out via HTTP to the browser. If we use the same
+        // broadcast channel for inference and serving the stream on the web, we get a large slack
+        // between the receivers which ultimately leads to the inferer only iterating through errors
+        // due to being so far behind.
+        // By using two different channels, the raw HTTP stream can have a high frame rate while
+        // the infered stream with a necessarily lower frame rate will still infer quite recent
+        // images. We ensure this by having a very small buffer in the infer channel, which leads
+        // the sending end to reject frames often and only pushing through very recent frames
+        // when the inferer is ready to receive a new frame.
         let sender_raw = pubsub.get_broadcast_sender(&name).await;
         let sender_infer = pubsub.get_mpsc_sender(&name).await;
 

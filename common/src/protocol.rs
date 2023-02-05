@@ -1,12 +1,16 @@
+//! Protocol definition for the data socket.
+//!
 use serde::{Deserialize, Serialize};
 
+/// Definition of protocol messages.
 #[derive(Debug, Deserialize, Serialize)]
 pub enum ProtoMsg {
     ConnectReq(String),
     FrameMsg(FrameMsg),
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+/// Frame message.
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FrameMsg {
     pub id: String,
     pub data: Vec<u8>,
@@ -27,19 +31,21 @@ impl ProtoMsg {
 #[cfg(test)]
 mod test {
 
-    use super::FrameMsg;
+    use super::*;
+    use crate::Error;
 
     #[test]
-    fn test_bincode_serde() {
+    fn test_bincode_serde() -> Result<(), Error> {
         let frame_msg = FrameMsg {
             id: "bla".into(),
             data: vec![1, 2, 3],
         };
 
-        let serialized: Vec<u8> = bincode::serialize(&frame_msg).unwrap();
-        dbg!(&serialized);
+        let serialized: Vec<u8> = bincode::serialize(&frame_msg)?;
+        let deserialized_msg: FrameMsg = bincode::deserialize(&serialized[..])?;
 
-        let deserialized_msg: FrameMsg = bincode::deserialize(&serialized[..]).unwrap();
-        dbg!(deserialized_msg);
+        assert_eq!(frame_msg, deserialized_msg);
+
+        Ok(())
     }
 }

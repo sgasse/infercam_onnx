@@ -1,9 +1,12 @@
+//! Utility functions
+//!
 use std::{fs::File, io::Cursor};
 
 use reqwest::Client;
 
 use crate::Error;
 
+/// Download a file from a URL to a given filepath.
 pub async fn download_file(
     client: &Client,
     url: &str,
