@@ -1,6 +1,6 @@
 [package]
 name = "infer_server"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -12,6 +12,7 @@ path = "src/lib.rs"
 async-stream = "0.3.3"
 axum = { version = "0.6.4", features = ["multipart", "query"] }
 bytes = "1.4.0"
+clap = { version = "4.0.11", features = ["derive"] }
 common = { path = "../common" }
 dirs = "4.0.0"
 env_logger = "0.10.0"
