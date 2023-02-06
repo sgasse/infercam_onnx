@@ -1,8 +1,21 @@
 # InferCam ONNX
 
-Client/server face detection from your webcam with Rust,
-[`onnxruntime`][onnxruntime] and the lightweight
+Client/server face detection from your webcam with [`tokio`][tokio],
+[`axum`][axum], [`tract-onnx`][tract] and the lightweight
 [ultraface network][ultraface-gh].
+
+![Concurrent inference](./resources/Concurrent_Inference_Example.png)
+
+In the example image above, we use two laptops. Both run a `cam_sender` client
+and send image streams to the second laptop, which runs the inference for
+face detection on both of those streams concurrently with the `infer_server`. We
+access both streams from the first laptop. This show-cases a few features:
+
+- Concurrent inference of several streams on the server
+- Sending image streams from edge devices over the network (by separating the
+  capturing and inference of streams, we can have low-powered devices to send
+  streams while a performant server does the inference)
+- Access to the streams over the network
 
 ## Overview
 
@@ -54,10 +67,11 @@ Things that stayed the same:
 
 ## Building & Running
 
-- Make sure that you have the `libv4l-dev` package installed on your system:
+- Make sure that you have the `libv4l-dev` package and a few other
+  build-related libraries installed on your system:
 
 ```bash
-sudo apt update && sudo apt install -y libv4l-dev
+sudo apt update && sudo apt install -y libv4l-dev build-essential nasm
 ```
 
 - Download a build of the `onnxruntime` from Microsoft
@@ -116,6 +130,7 @@ devices.
 [pretrained_ultraface]: https://github.com/onnx/models/tree/master/vision/body_analysis/ultraface
 [py_demo_code]: https://github.com/onnx/models/blob/master/vision/body_analysis/ultraface/dependencies/box_utils.py#L111
 [rscam]: https://crates.io/crates/rscam
+[tokio]: https://tokio.rs/
 [tract]: https://crates.io/crates/tract
 [turbojpeg]: https://docs.rs/turbojpeg/latest/turbojpeg/
 [ultraface-gh]: https://github.com/Linzaer/Ultra-Light-Fast-Generic-Face-Detector-1MB
