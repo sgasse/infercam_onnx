@@ -243,6 +243,7 @@ dependencies = [
  "futures-core",
  "log",
  "rscam",
+ "simple-error",
  "tokio",
  "tokio-util",
 ]

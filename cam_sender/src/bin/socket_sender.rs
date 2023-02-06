@@ -29,7 +29,7 @@ async fn main() -> Result<(), Error> {
     log::info!("Launching socket sender for channel {}", &args.channel);
 
     // Initialize webcam to send image stream
-    let capture_fn = get_capture_fn_linux("/dev/video0", (1280, 720), "MJPG", (1, 10))?;
+    let capture_fn = get_capture_fn_linux("/dev/video0", "MJPG", None, None)?;
 
     match TcpStream::connect(&args.address).await {
         Ok(stream) => {
