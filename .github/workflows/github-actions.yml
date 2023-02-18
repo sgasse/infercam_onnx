@@ -10,6 +10,39 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+
+  lint:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly
+          components: clippy
+      - run: cargo +nightly clippy --no-deps -- -D warnings
+
+  format:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: nightly
+          components: rustfmt
+      - run: cargo +nightly fmt --check
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: cargo test
+
   build_and_test:
     runs-on: ubuntu-latest
     container:
@@ -39,15 +72,15 @@ jobs:
           libv4l-dev
           nasm
 
-      - name: Lint
-        run: |
-          cargo +nightly fmt -- --check
-          cargo +nightly clippy --no-deps -- -D warnings
+      # - name: Lint
+      #   run: |
+      #     cargo +nightly fmt -- --check
+      #     cargo +nightly clippy --no-deps -- -D warnings
 
-      - name: Test
-        run: |
-          cargo check
-          cargo test --workspace -- --nocapture
+      # - name: Test
+      #   run: |
+      #     cargo check
+      #     cargo test --workspace -- --nocapture
 
       - name: Build
         run: |
