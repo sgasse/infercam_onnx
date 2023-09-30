@@ -1,4 +1,5 @@
-use cam_sender::{sensors::get_max_res_mjpg_capture_fn, Error};
+use anyhow::{bail, Result};
+use cam_sender::sensors::get_max_res_mjpg_capture_fn;
 use clap::Parser;
 use common::protocol::{FrameMsg, ProtoMsg};
 use env_logger::TimestampPrecision;
@@ -19,7 +20,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> Result<()> {
     let args = Args::parse();
 
     env_logger::builder()
@@ -61,9 +62,11 @@ async fn main() -> Result<(), Error> {
             }
         }
         Err(err) => {
-            log::error!("Error connecting to {}\n{}", &args.channel, err);
+            bail!(
+                "failed to connect to server with channel {}: {}",
+                &args.channel,
+                err
+            );
         }
     }
-
-    Ok(())
 }
