@@ -15,7 +15,7 @@ pub type CaptureFn = Box<dyn Fn() -> Option<Frame> + Send + Sync>;
 const DEFAULT_CAM_DEVICE: &str = "/dev/video0";
 
 /// Get a capture function to a video device on a Linux machine with maximum resolution in MJPG format.
-pub fn get_max_res_mjpg_capture_fn() -> Result<CaptureFn> {
+pub fn get_max_res_mjpg_capture_fn() -> Result<CameraWrapper<Camera>> {
     let mut cam = Camera::new(DEFAULT_CAM_DEVICE)?;
 
     let format = &cam
@@ -64,33 +64,44 @@ pub fn get_max_res_mjpg_capture_fn() -> Result<CaptureFn> {
         ..Default::default()
     })?;
 
-    Ok(Box::new(move || cam.capture().ok()))
+    // Ok(Box::new(move || cam.capture().ok()))
+    Ok(CameraWrapper { inner: cam })
 }
 
-/// Initialized, streamable camera.
-pub struct StreamableCamera {
-    capture_fn: CaptureFn,
+pub trait Capturable {
+    fn get_frame(&self) -> Option<Frame>;
 }
 
-impl StreamableCamera {
-    /// Create a new instance.
-    pub fn new(capture: CaptureFn) -> StreamableCamera {
-        StreamableCamera {
-            capture_fn: capture,
-        }
-    }
-
-    /// Capture a frame.
-    pub fn capture(&self) -> Option<Frame> {
-        (*self.capture_fn)()
+impl Capturable for Camera {
+    fn get_frame(&self) -> Option<Frame> {
+        self.capture().ok()
     }
 }
 
-impl Stream for StreamableCamera {
+pub struct CameraWrapper<T>
+where
+    T: Capturable,
+{
+    inner: T,
+}
+
+impl<T> CameraWrapper<T>
+where
+    T: Capturable,
+{
+    pub fn get_frame(&self) -> Option<Frame> {
+        self.inner.get_frame()
+    }
+}
+
+impl<T> Stream for CameraWrapper<T>
+where
+    T: Capturable,
+{
     type Item = std::result::Result<Bytes, std::io::Error>;
 
     fn poll_next(self: Pin<&mut Self>, _cx: &mut task::Context<'_>) -> Poll<Option<Self::Item>> {
-        match (*self.capture_fn)() {
+        match self.inner.get_frame() {
             Some(frame) => {
                 // Append `\n\n` to mark the end of a frame
                 let body = Bytes::copy_from_slice(&[&frame[..], "\n\n".as_bytes()].concat());
@@ -110,7 +121,7 @@ impl Stream for StreamableCamera {
 #[cfg(test)]
 mod test {
 
-    // #[cfg(webcam)]
+    #[cfg(webcam)]
     mod webcam_tests {
 
         use rscam::Camera;
