@@ -1,4 +1,4 @@
-use cam_sender::{sensors::get_capture_fn_linux, Error};
+use cam_sender::{sensors::get_max_res_mjpg_capture_fn, Error};
 use clap::Parser;
 use common::protocol::{FrameMsg, ProtoMsg};
 use env_logger::TimestampPrecision;
@@ -29,7 +29,7 @@ async fn main() -> Result<(), Error> {
     log::info!("Launching socket sender for channel {}", &args.channel);
 
     // Initialize webcam to send image stream
-    let capture_fn = get_capture_fn_linux("/dev/video0", "MJPG", None, None)?;
+    let capture_fn = get_max_res_mjpg_capture_fn()?;
 
     match TcpStream::connect(&args.address).await {
         Ok(stream) => {

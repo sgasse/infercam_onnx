@@ -2,48 +2,69 @@
 //!
 use std::pin::Pin;
 
+use anyhow::{Context, Result};
 use bytes::Bytes;
 use futures_core::{
-    task::{Context, Poll},
+    task::{self, Poll},
     Stream,
 };
-use rscam::{Camera, Config, Frame};
-use simple_error::simple_error;
-
-use crate::Error;
+use rscam::{Camera, Config, Frame, IntervalInfo, ResolutionInfo};
 
 pub type CaptureFn = Box<dyn Fn() -> Option<Frame> + Send + Sync>;
 
-/// Get a capture function to a video device on a Linux machine.
-pub fn get_capture_fn_linux(
-    device_name: &str,
-    format: &str,
-    resolution: Option<(u32, u32)>,
-    frame_rate: Option<(u32, u32)>,
-) -> Result<CaptureFn, Error> {
-    let mut cam = Camera::new(device_name)?;
-    log_supported_formats(&cam, format);
-    let format = format.as_bytes();
+const DEFAULT_CAM_DEVICE: &str = "/dev/video0";
 
-    log::info!("Using camera {}", device_name);
+/// Get a capture function to a video device on a Linux machine with maximum resolution in MJPG format.
+pub fn get_max_res_mjpg_capture_fn() -> Result<CaptureFn> {
+    let mut cam = Camera::new(DEFAULT_CAM_DEVICE)?;
 
-    let resolution = resolution
-        .map(Ok)
-        .unwrap_or_else(|| get_max_resolution(&cam, format))?;
+    let format = &cam
+        .formats()
+        .filter_map(|format_res| format_res.ok().map(|x| x.format))
+        .find(|x| x == "MJPG".as_bytes())
+        .context("failed to find required format MJPG")?;
 
-    let frame_rate = frame_rate
-        .map(Ok)
-        .unwrap_or_else(|| get_max_frame_rate(&cam, format, resolution))?;
+    let resolution = match cam.resolutions(format)? {
+        ResolutionInfo::Discretes(resolutions) => {
+            resolutions.iter().max_by(|a, b| a.0.cmp(&b.0)).cloned()
+        }
+        ResolutionInfo::Stepwise {
+            min: _,
+            max,
+            step: _,
+        } => Some(max),
+    }
+    .context("failed to get maximum resolution")?;
 
+    let interval = match cam.intervals(format, resolution)? {
+        IntervalInfo::Discretes(intervals) => {
+            intervals.iter().max_by(|a, b| a.0.cmp(&b.0)).cloned()
+        }
+        IntervalInfo::Stepwise {
+            min: _,
+            max,
+            step: _,
+        } => Some(max),
+    }
+    .context("failed to get maximum interval")?;
+
+    log::info!(
+        "Starting camera {} with format {}, resolution {}x{} and interval {}/{}",
+        DEFAULT_CAM_DEVICE,
+        String::from_utf8_lossy(format),
+        resolution.0,
+        resolution.1,
+        interval.1,
+        interval.0,
+    );
     cam.start(&Config {
-        interval: frame_rate,
+        interval,
         resolution,
         format,
         ..Default::default()
     })?;
 
-    let callback = move || cam.capture().ok();
-    Ok(Box::new(callback))
+    Ok(Box::new(move || cam.capture().ok()))
 }
 
 /// Initialized, streamable camera.
@@ -66,9 +87,9 @@ impl StreamableCamera {
 }
 
 impl Stream for StreamableCamera {
-    type Item = Result<Bytes, std::io::Error>;
+    type Item = std::result::Result<Bytes, std::io::Error>;
 
-    fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, _cx: &mut task::Context<'_>) -> Poll<Option<Self::Item>> {
         match (*self.capture_fn)() {
             Some(frame) => {
                 // Append `\n\n` to mark the end of a frame
@@ -86,96 +107,36 @@ impl Stream for StreamableCamera {
     }
 }
 
-/// Get the maximum supported resolution for the given format.
-fn get_max_resolution(cam: &Camera, format: &[u8]) -> Result<(u32, u32), Error> {
-    let resolution_info = cam.resolutions(format)?;
-    log::debug!("Found resolutions: {:?}", &resolution_info);
-    match resolution_info {
-        rscam::ResolutionInfo::Discretes(resolutions) => resolutions
-            .iter()
-            // Map to iterator over ((width, height) num_pixels)
-            .map(|res| (res, res.0 * res.1))
-            // Get the highest resolution in terms of number of pixels
-            .max_by(|a, b| a.1.cmp(&b.1))
-            // Extract width and height values
-            .map(|res| *res.0),
-        rscam::ResolutionInfo::Stepwise {
-            min: _,
-            max,
-            step: _,
-        } => Some(max),
-    }
-    .ok_or_else(|| simple_error!("No resolution found").into())
-}
-
-/// Get the maximum supported frame rate for the given format and resolution.
-fn get_max_frame_rate(
-    cam: &Camera,
-    format: &[u8],
-    resolution: (u32, u32),
-) -> Result<(u32, u32), Error> {
-    let interval_info = cam.intervals(format, resolution)?;
-    log::debug!("Found frame rates: {:?}", &interval_info);
-    match interval_info {
-        rscam::IntervalInfo::Discretes(frame_rates) => frame_rates
-            .iter()
-            // Map discrete values to real frame rate
-            .map(|(denominator, numerator)| ((denominator, numerator), numerator / denominator))
-            // Get the highest frame rate
-            .max_by(|a, b| a.1.cmp(&b.1))
-            // Extract denominator and numerator
-            .map(|((&d, &n), _)| (d, n)),
-        rscam::IntervalInfo::Stepwise {
-            min: _,
-            max,
-            step: _,
-        } => Some(max),
-    }
-    .ok_or_else(|| simple_error!("No frame rate found").into())
-}
-
-fn log_supported_formats(cam: &Camera, format: &str) {
-    let formats: Vec<_> = cam
-        .formats()
-        .map(|fmt| match fmt {
-            Ok(fmt) => Some(fmt),
-            Err(_) => None,
-        })
-        .collect();
-    log::debug!(
-        "Supported formats: {:?}, using format {:?}",
-        formats,
-        format
-    );
-}
-
 #[cfg(test)]
 mod test {
 
-    use super::*;
+    // #[cfg(webcam)]
+    mod webcam_tests {
 
-    #[test]
-    fn get_cam_info_if_available() -> Result<(), Error> {
-        let cam_name = "/dev/video0";
-        let cam = Camera::new(cam_name);
+        use rscam::Camera;
 
-        match cam {
-            Err(err) => println!("Could not initialize camera (maybe non available): {err}"),
-            Ok(cam) => {
-                let formats: Vec<_> = cam.formats().collect();
-                println!("Supported formats: {formats:?}");
+        use crate::Error;
 
-                let format = b"MJPG";
+        #[test]
+        fn get_cam_resolution() -> Result<(), Error> {
+            let cam_name = "/dev/video0";
+            let cam = Camera::new(cam_name)?;
 
-                let resolutions = cam.resolutions(format)?;
-                println!("Supported resolutions: {resolutions:?}");
-
-                let selected_resolution = get_max_resolution(&cam, format)?;
-                let frame_rates = cam.intervals(format, selected_resolution)?;
-                println!("Supported frame rates: {frame_rates:?}");
+            println!("Supported formats:");
+            for format in cam.formats() {
+                dbg!(format?);
             }
-        }
 
-        Ok(())
+            if let Ok(resolutions) = cam.resolutions(b"MJPG") {
+                dbg!(resolutions);
+            }
+
+            if let Ok(interval) = cam.intervals("MJPG".as_bytes(), (1280, 720)) {
+                println!("Supported interval:");
+                dbg!(interval);
+            }
+
+            Ok(())
+        }
     }
 }
