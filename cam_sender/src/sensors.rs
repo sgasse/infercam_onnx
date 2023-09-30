@@ -2,40 +2,69 @@
 //!
 use std::pin::Pin;
 
+use anyhow::{Context, Result};
 use bytes::Bytes;
 use futures_core::{
-    task::{Context, Poll},
+    task::{self, Poll},
     Stream,
 };
-use rscam::{Camera, Config, Frame};
-
-use crate::Error;
+use rscam::{Camera, Config, Frame, IntervalInfo, ResolutionInfo};
 
 pub type CaptureFn = Box<dyn Fn() -> Option<Frame> + Send + Sync>;
 
-/// Get a capture function to a video device on a Linux machine.
-pub fn get_capture_fn_linux(
-    device_name: &str,
-    resolution: (u32, u32),
-    format: &str,
-    frame_rate: (u32, u32),
-) -> Result<CaptureFn, Error> {
-    let mut cam = Camera::new(device_name)?;
+const DEFAULT_CAM_DEVICE: &str = "/dev/video0";
 
-    log::info!("Using camera {}", device_name);
-    for format in cam.formats() {
-        log::info!("Supported format: {:?}", format);
+/// Get a capture function to a video device on a Linux machine with maximum resolution in MJPG format.
+pub fn get_max_res_mjpg_capture_fn() -> Result<CaptureFn> {
+    let mut cam = Camera::new(DEFAULT_CAM_DEVICE)?;
+
+    let format = &cam
+        .formats()
+        .filter_map(|format_res| format_res.ok().map(|x| x.format))
+        .find(|x| x == "MJPG".as_bytes())
+        .context("failed to find required format MJPG")?;
+
+    let resolution = match cam.resolutions(format)? {
+        ResolutionInfo::Discretes(resolutions) => {
+            resolutions.iter().max_by(|a, b| a.0.cmp(&b.0)).cloned()
+        }
+        ResolutionInfo::Stepwise {
+            min: _,
+            max,
+            step: _,
+        } => Some(max),
     }
+    .context("failed to get maximum resolution")?;
 
+    let interval = match cam.intervals(format, resolution)? {
+        IntervalInfo::Discretes(intervals) => {
+            intervals.iter().max_by(|a, b| a.0.cmp(&b.0)).cloned()
+        }
+        IntervalInfo::Stepwise {
+            min: _,
+            max,
+            step: _,
+        } => Some(max),
+    }
+    .context("failed to get maximum interval")?;
+
+    log::info!(
+        "Starting camera {} with format {}, resolution {}x{} and interval {}/{}",
+        DEFAULT_CAM_DEVICE,
+        String::from_utf8_lossy(format),
+        resolution.0,
+        resolution.1,
+        interval.1,
+        interval.0,
+    );
     cam.start(&Config {
-        interval: frame_rate,
+        interval,
         resolution,
-        format: format.as_bytes(),
+        format,
         ..Default::default()
     })?;
 
-    let callback = move || cam.capture().ok();
-    Ok(Box::new(callback))
+    Ok(Box::new(move || cam.capture().ok()))
 }
 
 /// Initialized, streamable camera.
@@ -58,9 +87,9 @@ impl StreamableCamera {
 }
 
 impl Stream for StreamableCamera {
-    type Item = Result<Bytes, std::io::Error>;
+    type Item = std::result::Result<Bytes, std::io::Error>;
 
-    fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, _cx: &mut task::Context<'_>) -> Poll<Option<Self::Item>> {
         match (*self.capture_fn)() {
             Some(frame) => {
                 // Append `\n\n` to mark the end of a frame
@@ -81,7 +110,7 @@ impl Stream for StreamableCamera {
 #[cfg(test)]
 mod test {
 
-    #[cfg(webcam)]
+    // #[cfg(webcam)]
     mod webcam_tests {
 
         use rscam::Camera;
@@ -96,6 +125,10 @@ mod test {
             println!("Supported formats:");
             for format in cam.formats() {
                 dbg!(format?);
+            }
+
+            if let Ok(resolutions) = cam.resolutions(b"MJPG") {
+                dbg!(resolutions);
             }
 
             if let Ok(interval) = cam.intervals("MJPG".as_bytes(), (1280, 720)) {
