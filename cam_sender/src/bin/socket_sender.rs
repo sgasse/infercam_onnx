@@ -29,7 +29,7 @@ async fn main() -> Result<(), Error> {
     log::info!("Launching socket sender for channel {}", &args.channel);
 
     // Initialize webcam to send image stream
-    let capture_fn = get_max_res_mjpg_capture_fn()?;
+    let cam = get_max_res_mjpg_capture_fn()?;
 
     match TcpStream::connect(&args.address).await {
         Ok(stream) => {
@@ -46,7 +46,7 @@ async fn main() -> Result<(), Error> {
 
             // Send captured frames in a loop
             loop {
-                match capture_fn() {
+                match cam.get_frame() {
                     Some(frame) => {
                         let data = ProtoMsg::FrameMsg(FrameMsg::new(
                             args.channel.clone(),
