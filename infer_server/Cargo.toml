@@ -9,6 +9,7 @@ name = "infer_server"
 path = "src/lib.rs"
 
 [dependencies]
+anyhow = "1.0.75"
 async-stream = "0.3.3"
 axum = { version = "0.6.4", features = ["multipart", "query"] }
 bytes = "1.4.0"
@@ -28,12 +29,14 @@ rusttype = "0.9.3"
 serde = { version = "1.0.152", features = ["derive"] }
 simple-error = "0.2.3"
 smallvec = "1.10.0"
+thingbuf = { version = "0.1.4", default-features = false, features = [
+    "static",
+] }
 tokio = { version = "1.25.0", features = ["full"] }
-tokio-util = { version = "0.7.4", features = ["codec"] }
+tokio-stream = { version = "0.1.14", features = ["sync"] }
+tokio-util = { version = "0.7.4", features = ["net", "codec"] }
 tract-onnx = "0.19.2"
 turbojpeg = { version = "0.5.2", features = ["image"] }
 
 [profile.release]
 debug = true
-
-

@@ -1,18 +1,18 @@
-use std::time::Duration;
-
 use anyhow::{bail, Result};
 use cam_sender::sensors::{get_max_res_mjpg_capture_fn, CameraWrapper};
 use clap::Parser;
+use clap::ValueEnum;
 use common::protocol::{FrameMsg, ProtoMsg};
 use env_logger::TimestampPrecision;
 use futures::sink::SinkExt;
 use rscam::Camera;
+use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
 #[derive(Parser, Debug)]
 #[clap(author, version)]
-struct Args {
+struct Cli {
     /// Address of the infer server to connect to
     #[clap(long, default_value = "127.0.0.1:3001")]
     address: String,
@@ -20,11 +20,19 @@ struct Args {
     /// Channel name that this sender publishes to
     #[clap(long, default_value = "simon")]
     channel: String,
+
+    #[clap(long, default_value = "tcp")]
+    protocol: Protocol,
+}
+
+#[derive(Clone, Debug, ValueEnum)]
+pub enum Protocol {
+    Tcp,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::parse();
+    let args = Cli::parse();
 
     env_logger::builder()
         .format_timestamp(Some(TimestampPrecision::Millis))
@@ -44,7 +52,7 @@ async fn main() -> Result<()> {
     }
 }
 
-async fn tcp_sender(cam: &CameraWrapper<Camera>, args: &Args) -> Result<()> {
+async fn tcp_sender(cam: &CameraWrapper<Camera>, args: &Cli) -> Result<()> {
     match TcpStream::connect(&args.address).await {
         Ok(stream) => {
             log::info!("Client connected to {}", &args.channel);

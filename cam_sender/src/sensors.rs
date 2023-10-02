@@ -38,7 +38,7 @@ pub fn get_max_res_mjpg_capture_fn() -> Result<CameraWrapper<Camera>> {
 
     let interval = match cam.intervals(format, resolution)? {
         IntervalInfo::Discretes(intervals) => {
-            intervals.iter().max_by(|a, b| a.0.cmp(&b.0)).cloned()
+            intervals.iter().max_by(|a, b| a.1.cmp(&b.1)).cloned()
         }
         IntervalInfo::Stepwise {
             min: _,

@@ -1,11 +1,12 @@
 //! Neural network module with model struct, pre- and post-process functions.
 //!
-use image::RgbImage;
+use anyhow::Result;
+use image::{GenericImageView, Rgb, RgbImage};
 use ndarray::s;
 use smallvec::SmallVec;
 use tract_onnx::prelude::*;
 
-use crate::{utils::download_file, Error};
+use crate::utils::download_file;
 
 /// Bounding box defined as `[x_top_left, y_top_left, x_bottom_right, y_bottom_right]`.
 pub type Bbox = [f32; 4];
@@ -21,7 +22,7 @@ const ULTRAFACE_LINK_640: &str = "https://github.com/onnx/models/raw/main/vision
 const ULTRAFACE_LINK_320: &str = "https://github.com/onnx/models/raw/main/vision/body_analysis/ultraface/models/version-RFB-320.onnx";
 
 pub trait InferModel {
-    fn run(&self, input: RgbImage) -> Result<Vec<(Bbox, f32)>, Error>;
+    fn run(&self, input: &RgbImage) -> Result<Vec<(Bbox, f32)>>;
 }
 
 /// Supported variants of the Ultraface model.
@@ -51,11 +52,7 @@ pub struct UltrafaceModel {
 
 impl UltrafaceModel {
     /// Load and prepare an Ultraface model for inference.
-    pub async fn new(
-        variant: UltrafaceVariant,
-        max_iou: f32,
-        min_confidence: f32,
-    ) -> Result<Self, Error> {
+    pub async fn new(variant: UltrafaceVariant, max_iou: f32, min_confidence: f32) -> Result<Self> {
         let (width, height) = variant.width_height();
         let model = Self::get_model(&variant).await?;
         println!("Initialized Ultraface model");
@@ -70,9 +67,12 @@ impl UltrafaceModel {
     }
 
     /// Pre-process an image to be used as inference input.
-    fn preproc(&self, input: RgbImage) -> TValue {
+    fn preproc<I>(&self, input: &I) -> TValue
+    where
+        I: GenericImageView<Pixel = Rgb<u8>>,
+    {
         let resized: RgbImage = image::imageops::resize(
-            &input,
+            input,
             self.width,
             self.height,
             // TODO: Test different filters
@@ -106,7 +106,7 @@ impl UltrafaceModel {
     ///
     /// The output is a vector of bounding boxes with confidence scores in descending order of
     /// certainty. The bounding boxes are defined by their **relative** coordinates.
-    fn postproc(&self, raw_nn_out: NnOut) -> Result<Vec<(Bbox, f32)>, Error> {
+    fn postproc(&self, raw_nn_out: NnOut) -> Result<Vec<(Bbox, f32)>> {
         // Extract confidences
         let confidences = raw_nn_out[0].to_array_view::<f32>()?;
         let confidences = confidences.slice(s![0, .., 1]);
@@ -122,6 +122,8 @@ impl UltrafaceModel {
         // TODO:
         // - BorrowedBbox<'_>
         // - Work with non-sorted data for non_maximum_suppression
+        // - Preallocate vec in non-max-supp
+        // - Impl GenericImgView trait for different buffer
 
         // Fuse bounding boxes with confidence scores
         // Filter out bounding boxes with a confidence score below the threshold
@@ -144,7 +146,7 @@ impl UltrafaceModel {
     }
 
     /// Get model by looking it up in the cache or downloading it if not found.
-    async fn get_model(variant: &UltrafaceVariant) -> Result<NnModel, Error> {
+    async fn get_model(variant: &UltrafaceVariant) -> Result<NnModel> {
         let (model_name, download_link) = match variant {
             UltrafaceVariant::W640H480 => ("ultraface-RFB-640.onnx", ULTRAFACE_LINK_640),
             UltrafaceVariant::W320H240 => ("ultraface-RFB-320.onnx", ULTRAFACE_LINK_320),
@@ -180,7 +182,7 @@ impl UltrafaceModel {
 }
 
 impl InferModel for UltrafaceModel {
-    fn run(&self, input: RgbImage) -> Result<Vec<(Bbox, f32)>, Error> {
+    fn run(&self, input: &RgbImage) -> Result<Vec<(Bbox, f32)>> {
         let valid_input = tvec!(self.preproc(input));
         let raw_nn_out = self.model.run(valid_input)?;
         let selected_bboxes = self.postproc(raw_nn_out)?;
