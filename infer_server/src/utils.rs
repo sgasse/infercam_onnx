@@ -2,16 +2,15 @@
 //!
 use std::{fs::File, io::Cursor};
 
+use anyhow::Result;
 use reqwest::Client;
-
-use crate::Error;
 
 /// Download a file from a URL to a given filepath.
 pub async fn download_file(
     client: &Client,
     url: &str,
     filepath: impl AsRef<std::path::Path>,
-) -> Result<(), Error> {
+) -> Result<()> {
     let resp = client.get(url).send().await?;
 
     let mut file = File::create(filepath)?;

@@ -1,11 +1,22 @@
 //! Inference server library.
 //!
-pub mod data_socket;
-pub mod endpoints;
-pub mod inferer;
+
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+};
+
+pub mod hour_glass;
+pub mod meter;
+pub mod msg_passing;
 pub mod nn;
-pub mod pubsub;
 pub mod utils;
 
-/// Error type.
-pub type Error = Box<dyn std::error::Error>;
+fn hashed<T>(data: T) -> u64
+where
+    T: Hash,
+{
+    let mut hasher = DefaultHasher::new();
+    data.hash(&mut hasher);
+    hasher.finish()
+}

@@ -2,15 +2,19 @@
 //!
 use std::{net::SocketAddr, sync::Arc};
 
+use anyhow::Result;
 use axum::{routing::get, Extension, Router};
 use clap::Parser;
 use env_logger::TimestampPrecision;
 use infer_server::{
-    data_socket::spawn_data_socket,
-    endpoints::{face_stream, healthcheck, named_stream},
-    inferer::InferBroker,
-    pubsub::NamedPubSub,
-    Error,
+    hour_glass::{
+        data_socket::spawn_data_socket,
+        endpoints::{faces_stream, healthcheck, named_stream},
+        inferer::Inferer,
+        router::FrameRouter,
+        INCOMING_FRAMES_CHANNEL, INFER_IMAGES_CHANNEL,
+    },
+    meter::spawn_meter_logger,
 };
 
 #[derive(Parser, Debug)]
@@ -26,7 +30,7 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Error> {
+async fn main() -> Result<()> {
     let args = Args::parse();
 
     // Setup logger
@@ -34,30 +38,30 @@ async fn main() -> Result<(), Error> {
         .format_timestamp(Some(TimestampPrecision::Millis))
         .init();
 
-    // Build Pub/Sub-Engine to communicate between data input, inference and serving via HTTP
-    let pubsub = Arc::new(NamedPubSub::new());
+    let (incoming_tx, incoming_rx) = INCOMING_FRAMES_CHANNEL.split();
+    let (infer_tx, infer_rx) = INFER_IMAGES_CHANNEL.split();
+    let frame_router = Arc::new(FrameRouter::new(infer_tx));
 
-    // Build inferer to determine faces with confidences on image streams
-    let inferer = Arc::new(InferBroker::new(Arc::clone(&pubsub)).await);
+    {
+        let frame_router = frame_router.clone();
+        tokio::spawn(async move { frame_router.run(incoming_rx).await });
+    }
 
-    // Spawn separate task to run the inference on
-    let inferer_ = Arc::clone(&inferer);
-    tokio::spawn(async move {
-        loop {
-            inferer_.run().await;
-        }
-    });
+    {
+        tokio::spawn(async move { Inferer::new(infer_rx).await.run().await });
+    }
 
     // Create socket to receive image streams via network
-    spawn_data_socket(pubsub.clone(), &args.socket_address).await?;
+    spawn_data_socket(incoming_tx, &args.socket_address).await?;
+
+    spawn_meter_logger();
 
     // Build HTTP server with endpoints
     let app = Router::new()
         .route("/healthcheck", get(healthcheck))
         .route("/stream", get(named_stream))
-        .route("/face_stream", get(face_stream))
-        .layer(Extension(pubsub))
-        .layer(Extension(inferer));
+        .route("/face_stream", get(faces_stream))
+        .layer(Extension(frame_router));
 
     // Serve HTTP server
     let addr: SocketAddr = args.server_address.parse()?;
