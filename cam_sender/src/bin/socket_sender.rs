@@ -1,9 +1,12 @@
+use std::time::Duration;
+
 use anyhow::{bail, Result};
-use cam_sender::sensors::get_max_res_mjpg_capture_fn;
+use cam_sender::sensors::{get_max_res_mjpg_capture_fn, CameraWrapper};
 use clap::Parser;
 use common::protocol::{FrameMsg, ProtoMsg};
 use env_logger::TimestampPrecision;
 use futures::sink::SinkExt;
+use rscam::Camera;
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
@@ -32,6 +35,16 @@ async fn main() -> Result<()> {
     // Initialize webcam to send image stream
     let cam = get_max_res_mjpg_capture_fn()?;
 
+    loop {
+        if let Err(e) = tcp_sender(&cam, &args).await {
+            log::warn!("Error in sender: {e}. Reconnecting...");
+        }
+
+        tokio::time::sleep(Duration::from_secs(3)).await;
+    }
+}
+
+async fn tcp_sender(cam: &CameraWrapper<Camera>, args: &Args) -> Result<()> {
     match TcpStream::connect(&args.address).await {
         Ok(stream) => {
             log::info!("Client connected to {}", &args.channel);
