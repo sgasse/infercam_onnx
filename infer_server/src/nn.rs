@@ -108,23 +108,24 @@ impl UltrafaceModel {
     /// certainty. The bounding boxes are defined by their **relative** coordinates.
     fn postproc(&self, raw_nn_out: NnOut) -> Result<Vec<(Bbox, f32)>, Error> {
         // Extract confidences
-        let confidences = raw_nn_out[0]
-            .to_array_view::<f32>()?
-            .slice(s![0, .., 1])
-            .to_vec();
+        let confidences = raw_nn_out[0].to_array_view::<f32>()?;
+        let confidences = confidences.slice(s![0, .., 1]);
 
         // Extract relative coordinates of bounding boxes
-        let bboxes: Vec<f32> = raw_nn_out[1]
-            .to_array_view::<f32>()?
-            .iter()
-            .cloned()
-            .collect();
-        let bboxes: Vec<Bbox> = bboxes.chunks(4).map(|x| x.try_into().unwrap()).collect();
+        let bboxes = raw_nn_out[1].to_array_view::<f32>()?;
+        let bboxes = bboxes
+            .as_slice()
+            .unwrap()
+            .chunks(4)
+            .map(|x| Bbox::try_from(x).unwrap());
+
+        // TODO:
+        // - BorrowedBbox<'_>
+        // - Work with non-sorted data for non_maximum_suppression
 
         // Fuse bounding boxes with confidence scores
         // Filter out bounding boxes with a confidence score below the threshold
         let mut bboxes_with_confidences: Vec<_> = bboxes
-            .iter()
             .zip(confidences.iter())
             .filter_map(|(bbox, confidence)| match confidence {
                 x if *x > self.min_confidence => Some((bbox, confidence)),
@@ -199,10 +200,10 @@ impl InferModel for UltrafaceModel {
 /// This iterates over all bounding boxes in `sorted_bboxes_with_confidences`. Any candidates with
 /// scores generally too low to be considered should be filtered out before.
 fn non_maximum_suppression(
-    mut sorted_bboxes_with_confidences: Vec<(&Bbox, &f32)>,
+    mut sorted_bboxes_with_confidences: Vec<(Bbox, &f32)>,
     max_iou: f32,
 ) -> Vec<(Bbox, f32)> {
-    let mut selected = vec![];
+    let mut selected = Vec::with_capacity(10);
     'candidates: loop {
         // Get next most confident bbox from the back of ascending-sorted vector.
         // All boxes fulfill the minimum confidence criterium.
@@ -210,14 +211,14 @@ fn non_maximum_suppression(
             Some((bbox, confidence)) => {
                 // Check for overlap with any of the selected bboxes
                 for (selected_bbox, _) in selected.iter() {
-                    match iou(bbox, selected_bbox) {
+                    match iou(&bbox, selected_bbox) {
                         x if x > max_iou => continue 'candidates,
                         _ => (),
                     }
                 }
 
                 // bbox has no large overlap with any of the selected ones, add it
-                selected.push((*bbox, *confidence))
+                selected.push((bbox, *confidence))
             }
             None => break 'candidates,
         }
