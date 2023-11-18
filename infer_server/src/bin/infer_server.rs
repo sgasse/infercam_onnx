@@ -7,14 +7,12 @@ use axum::{routing::get, Extension, Router};
 use clap::Parser;
 use env_logger::TimestampPrecision;
 use infer_server::{
-    hour_glass::{
-        data_socket::spawn_data_socket,
-        endpoints::{faces_stream, healthcheck, named_stream},
-        inferer::Inferer,
-        router::FrameRouter,
-        INCOMING_FRAMES_CHANNEL, INFER_IMAGES_CHANNEL,
-    },
+    data_socket::spawn_data_socket,
+    endpoints::{faces_stream, healthcheck, named_stream},
+    inferer::Inferer,
     meter::spawn_meter_logger,
+    router::FrameRouter,
+    INCOMING_FRAMES_CHANNEL, INFER_IMAGES_CHANNEL,
 };
 
 #[derive(Parser, Debug)]

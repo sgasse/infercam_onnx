@@ -7,7 +7,7 @@ use futures::StreamExt;
 use serde::Deserialize;
 use tokio_stream::wrappers::BroadcastStream;
 
-use crate::{hour_glass::router::FrameRouter, meter::METER};
+use crate::{meter::METER, router::FrameRouter};
 
 /// Search parameters available to streams.
 #[derive(Debug, Deserialize)]
