@@ -10,7 +10,7 @@ use tokio::{
 };
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-use crate::hour_glass::StaticFrameSender;
+use crate::StaticFrameSender;
 
 pub async fn spawn_data_socket(
     tx: StaticFrameSender,

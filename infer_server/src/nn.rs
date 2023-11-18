@@ -119,12 +119,6 @@ impl UltrafaceModel {
             .chunks(4)
             .map(|x| Bbox::try_from(x).unwrap());
 
-        // TODO:
-        // - BorrowedBbox<'_>
-        // - Work with non-sorted data for non_maximum_suppression
-        // - Preallocate vec in non-max-supp
-        // - Impl GenericImgView trait for different buffer
-
         // Fuse bounding boxes with confidence scores
         // Filter out bounding boxes with a confidence score below the threshold
         let mut bboxes_with_confidences: Vec<_> = bboxes

@@ -7,8 +7,8 @@ use imageproc::{
 use lazy_static::lazy_static;
 
 use crate::{
-    hour_glass::StaticImageReceiver,
     nn::{Bbox, InferModel, UltrafaceModel},
+    StaticImageReceiver,
 };
 
 use super::as_jpeg_stream_item;
@@ -93,7 +93,7 @@ fn draw_bboxes_on_image(
 
 lazy_static! {
     static ref DEJAVU_MONO: rusttype::Font<'static> = {
-        let font_data: &[u8] = include_bytes!("../../../resources/DejaVuSansMono.ttf");
+        let font_data: &[u8] = include_bytes!("../../resources/DejaVuSansMono.ttf");
         let font: rusttype::Font<'static> =
             rusttype::Font::try_from_bytes(font_data).expect("failed to load font");
         font

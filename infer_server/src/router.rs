@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Mutex};
 use anyhow::{bail, Result};
 use common::protocol::ProtoMsg;
 
-use crate::hour_glass::{
+use crate::{
     broadcast_channel, hashed, BroadcastReceiver, BroadcastSender, StaticFrameReceiver,
     StaticImageSender,
 };
