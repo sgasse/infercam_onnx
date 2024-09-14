@@ -5,9 +5,9 @@ edition = "2021"
 
 [dependencies]
 anyhow = { workspace = true }
+argh = { workspace = true }
 axum = { workspace = true, features = ["multipart", "query"] }
 bytes = { workspace = true }
-clap = { workspace = true, features = ["derive"] }
 common = { workspace = true }
 dirs = { workspace = true }
 env_logger = { workspace = true }

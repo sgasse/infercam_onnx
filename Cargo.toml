@@ -5,6 +5,7 @@ members = ["infer_server", "cam_sender", "common"]
 
 [workspace.dependencies]
 anyhow = "1.0.75"
+argh = "0.1.12"
 axum = "0.6.4"
 bincode = "1.3.3"
 bytes = "1.4.0"

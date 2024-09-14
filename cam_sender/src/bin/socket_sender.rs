@@ -1,38 +1,45 @@
 use anyhow::{bail, Result};
+use argh::FromArgs;
 use cam_sender::sensors::{get_max_res_mjpg_capture_fn, CameraWrapper};
-use clap::Parser;
-use clap::ValueEnum;
 use common::protocol::{FrameMsg, ProtoMsg};
 use env_logger::TimestampPrecision;
 use futures::sink::SinkExt;
 use rscam::Camera;
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-#[derive(Parser, Debug)]
-#[clap(author, version)]
+#[derive(FromArgs)]
+/// Send webcam stream to infer_server.
 struct Cli {
-    /// Address of the infer server to connect to
-    #[clap(long, default_value = "127.0.0.1:3001")]
+    /// address of the infer server to connect to
+    #[argh(option, default = "String::from(\"127.0.0.1:3001\")")]
     address: String,
 
-    /// Channel name that this sender publishes to
-    #[clap(long, default_value = "simon")]
+    /// channel name that this sender publishes to
+    #[argh(option, default = "String::from(\"simon\")")]
     channel: String,
-
-    #[clap(long, default_value = "tcp")]
-    protocol: Protocol,
 }
 
-#[derive(Clone, Debug, ValueEnum)]
+#[derive(Clone, Debug)]
 pub enum Protocol {
     Tcp,
 }
 
+impl FromStr for Protocol {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "tcp" | "Tcp" | "TCP" => Ok(Protocol::Tcp),
+            _ => Err(s.to_owned()),
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Cli::parse();
+    let args: Cli = argh::from_env();
 
     env_logger::builder()
         .format_timestamp(Some(TimestampPrecision::Millis))

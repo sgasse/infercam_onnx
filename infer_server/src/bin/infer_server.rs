@@ -3,8 +3,8 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
+use argh::FromArgs;
 use axum::{routing::get, Extension, Router};
-use clap::Parser;
 use env_logger::TimestampPrecision;
 use infer_server::{
     data_socket::spawn_data_socket,
@@ -15,21 +15,21 @@ use infer_server::{
     INCOMING_FRAMES_CHANNEL, INFER_IMAGES_CHANNEL,
 };
 
-#[derive(Parser, Debug)]
-#[clap(author, version)]
+#[derive(Debug, FromArgs)]
+/// Run infer server.
 struct Args {
-    /// Address of the HTTP server
-    #[clap(long, default_value = "127.0.0.1:3000")]
+    /// address of the HTTP server
+    #[argh(option, default = "String::from(\"127.0.0.1:3000\")")]
     server_address: String,
 
-    /// Address of the data socket
-    #[clap(long, default_value = "127.0.0.1:3001")]
+    /// address of the data socket
+    #[argh(option, default = "String::from(\"127.0.0.1:3001\")")]
     socket_address: String,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::parse();
+    let args: Args = argh::from_env();
 
     // Setup logger
     env_logger::builder()
