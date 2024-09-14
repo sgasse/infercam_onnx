@@ -32,7 +32,7 @@ impl Inferer {
                 let width = recv_ref.0;
                 let height = recv_ref.1;
 
-                let image: RgbImage = turbojpeg::decompress_image(&recv_ref.2.as_slice())
+                let image: RgbImage = turbojpeg::decompress_image(recv_ref.2.as_slice())
                     .expect("failed to decompress");
                 if let Ok(bboxes_with_confidences) = self.infer_faces(&image) {
                     let frame = draw_bboxes_on_image(image, bboxes_with_confidences, width, height);

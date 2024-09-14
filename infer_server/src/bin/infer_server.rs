@@ -18,11 +18,11 @@ use infer_server::{
 #[derive(Parser, Debug)]
 #[clap(author, version)]
 struct Args {
-    /// Address of the infer server to connect to
+    /// Address of the HTTP server
     #[clap(long, default_value = "127.0.0.1:3000")]
     server_address: String,
 
-    /// Address of the infer server to connect to
+    /// Address of the data socket
     #[clap(long, default_value = "127.0.0.1:3001")]
     socket_address: String,
 }

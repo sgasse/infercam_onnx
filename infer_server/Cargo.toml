@@ -3,11 +3,6 @@ name = "infer_server"
 version = "0.3.2"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[lib]
-name = "infer_server"
-path = "src/lib.rs"
-
 [dependencies]
 anyhow = "1.0.75"
 async-stream = "0.3.3"
@@ -37,6 +32,3 @@ tokio-stream = { version = "0.1.14", features = ["sync"] }
 tokio-util = { version = "0.7.4", features = ["net", "codec"] }
 tract-onnx = "0.19.2"
 turbojpeg = { version = "0.5.2", features = ["image"] }
-
-[profile.release]
-debug = true

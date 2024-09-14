@@ -64,7 +64,6 @@ pub fn get_max_res_mjpg_capture_fn() -> Result<CameraWrapper<Camera>> {
         ..Default::default()
     })?;
 
-    // Ok(Box::new(move || cam.capture().ok()))
     Ok(CameraWrapper { inner: cam })
 }
 

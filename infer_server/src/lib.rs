@@ -49,7 +49,7 @@ fn as_jpeg_stream_item(data: &[u8]) -> Bytes {
     Bytes::copy_from_slice(
         &[
             "--frame\r\nContent-Type: image/jpeg\r\n\r\n".as_bytes(),
-            &data[..],
+            data,
             "\r\n\r\n".as_bytes(),
         ]
         .concat(),

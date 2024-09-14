@@ -7,6 +7,7 @@ use tokio::{task::JoinHandle, time::interval};
 
 pub static METER: Meter = Meter::new();
 
+#[derive(Default)]
 pub struct Meter {
     raw_frames: AtomicU64,
     infered_frames: AtomicU64,

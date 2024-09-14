@@ -6,7 +6,7 @@ Client/server face detection from your webcam with [`tokio`][tokio],
 
 ![Concurrent inference](./resources/Concurrent_Inference_Example.png)
 
-In the example image above, we use two laptops. Both run a `cam_sender` client
+In the example image above, we use two laptops. Both run a `socket_sender` client
 and send image streams to the second laptop, which runs the inference for
 face detection on both of those streams concurrently with the `infer_server`. We
 access both streams from the first laptop. This show-cases a few features:
@@ -16,6 +16,18 @@ access both streams from the first laptop. This show-cases a few features:
   capturing and inference of streams, we can have low-powered devices to send
   streams while a performant server does the inference)
 - Access to the streams over the network
+
+Run with:
+
+```sh
+# server
+RUST_LOG=debug cargo run --release --bin infer_server
+
+# client
+RUST_LOG=debug cargo run --release --bin socket_sender
+```
+
+Then check e.g. http://127.0.0.1:3000/face_stream?name=simon
 
 ## Overview
 
@@ -31,11 +43,8 @@ This is my second implementation of this project. Changes to the first version:
   streams and serves endpoints of both the raw streams and streams with faces
   infered. The previous version used [`actix-web`][actix-web] as web framework,
   switching to [`axum`][axum] was mostly curiosity.
-- `socket_sender` establishes a TCP connection to the `infer_sender` and streams
+- `socket_sender` establishes a TCP connection to the `infer_server` and streams
   frames to it which can be shown raw or infered in the browser.
-- `multipart_sender` allows us to send a stream as multipart form data via HTTP
-  to the `infer_server`. It does not yield a good performance in practice and is
-  only left in here for reference purposes.
 - In the first version, opening a tab to either the raw or infered stream
   endpoint triggered an independent run of the capture function. So opening four
   tabs meant having four streams capture independently. In the refactored
