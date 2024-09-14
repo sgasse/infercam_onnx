@@ -4,31 +4,26 @@ version = "0.3.2"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.75"
-async-stream = "0.3.3"
-axum = { version = "0.6.4", features = ["multipart", "query"] }
-bytes = "1.4.0"
-clap = { version = "4.0.11", features = ["derive"] }
-common = { path = "../common" }
-dirs = "4.0.0"
-env_logger = "0.10.0"
-futures = "0.3.26"
-image = "0.24.5"
-imageproc = "0.23.0"
-itertools = "0.11.0"
-lazy_static = "1.4.0"
-log = "0.4.17"
-ndarray = "0.15.6"
-reqwest = { version = "0.11.14", features = ["stream"] }
-rusttype = "0.9.3"
-serde = { version = "1.0.152", features = ["derive"] }
-simple-error = "0.2.3"
-smallvec = "1.10.0"
-thingbuf = { version = "0.1.4", default-features = false, features = [
-    "static",
-] }
-tokio = { version = "1.25.0", features = ["full"] }
-tokio-stream = { version = "0.1.14", features = ["sync"] }
-tokio-util = { version = "0.7.4", features = ["net", "codec"] }
-tract-onnx = "0.19.2"
-turbojpeg = { version = "0.5.2", features = ["image"] }
+anyhow = { workspace = true }
+axum = { workspace = true, features = ["multipart", "query"] }
+bytes = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+common = { workspace = true }
+dirs = { workspace = true }
+env_logger = { workspace = true }
+futures = { workspace = true }
+image = { workspace = true }
+imageproc = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+ndarray = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
+rusttype = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+smallvec = { workspace = true }
+thingbuf = { workspace = true, features = ["static"] }
+tokio = { workspace = true, features = ["full"] }
+tokio-stream = { workspace = true, features = ["sync"] }
+tokio-util = { workspace = true, features = ["net", "codec"] }
+tract-onnx = { workspace = true }
+turbojpeg = { workspace = true, features = ["image"] }
